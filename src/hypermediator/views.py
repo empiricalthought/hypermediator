@@ -37,6 +37,7 @@ class FunctionDeclaration:
     unavailable: Callable[[HttpRequest, Any], str | None] | None = None
     partial: str | None = None
     placements: Mapping[str, Placement] = MappingProxyType({})
+    link_headers: Mapping[str, bool] = MappingProxyType({})
     form_class: type[BaseForm] | None = None
     url_kwargs: Callable[[Any], Mapping[str, Any]] | None = None
 
@@ -83,6 +84,7 @@ class HypermediaMixin:
 
     affordance: Affordance | None = None
     placements: Mapping[str, Placement] = MappingProxyType({})
+    link_headers: Mapping[str, bool] = MappingProxyType({})
     partial: str | None = None
 
     def unavailable(self, obj: object | None) -> str | None:
@@ -142,28 +144,39 @@ def affordance(
     rel: Sequence[str] = (),
     placement: Placement | None = None,
     trigger: str | None = None,
+    link_header: bool = False,
     permission: str | Sequence[str] | None = None,
     model: type[Model] | None = None,
     unavailable: Callable[[HttpRequest, Any], str | None] | None = None,
     partial: str | None = None,
     placements: Mapping[str, Placement] | None = None,
+    link_headers: Mapping[str, bool] | None = None,
     form_class: type[BaseForm] | None = None,
     url_kwargs: Callable[[Any], Mapping[str, Any]] | None = None,
 ) -> Callable[[_V], _V]:
     """Declare an affordance on a function view, enforcing ``permission`` (a login redirect
     for an anonymous user, else 403, as ``permission_required``) and, on every unsafe method,
-    ``unavailable`` (409). ``url_kwargs`` maps a bound object to the route's URL kwargs
+    ``unavailable`` (409). ``link_header`` selects it for the ``Link`` header; ``link_headers``
+    overrides that for other affordances this view's page references, by URL name, as
+    ``placements`` does. ``url_kwargs`` maps a bound object to the route's URL kwargs
     (default ``{"pk": obj.pk}``)."""
     if isinstance(rel, str):
         raise TypeError(f"Affordance rel must be a sequence of tokens, not {rel!r}")
     permissions = (permission,) if isinstance(permission, str) else tuple(permission or ())
     declaration = FunctionDeclaration(
-        affordance=Affordance(label=label, rel=tuple(rel), placement=placement, trigger=trigger),
+        affordance=Affordance(
+            label=label,
+            rel=tuple(rel),
+            placement=placement,
+            trigger=trigger,
+            link_header=link_header,
+        ),
         permission=permissions,
         model=model,
         unavailable=unavailable,
         partial=partial,
         placements=MappingProxyType(dict(placements or {})),
+        link_headers=MappingProxyType(dict(link_headers or {})),
         form_class=form_class,
         url_kwargs=url_kwargs,
     )

@@ -93,6 +93,7 @@ class Bound:
     reason: str | None
     dom_id: str
     placement: Placement
+    link_header: bool = False
 
 
 def _allowed_methods(view_class: type) -> frozenset[str]:
@@ -172,9 +173,11 @@ def bound_for(
     state: State,
     reason: str | None,
     placement: Placement | None = None,
+    link_header_override: bool | None = None,
 ) -> Bound:
     """``endpoint`` bound to ``obj``: its URL, wrapper id and placement (declared, else ITEM
-    for an object and PAGE otherwise)."""
+    for an object and PAGE otherwise) and whether it is selected for the ``Link`` header (declared,
+    unless the page overrides it)."""
     return Bound(
         endpoint=endpoint,
         url=reverse(endpoint.name, kwargs=endpoint.url_kwargs(obj)),
@@ -187,6 +190,11 @@ def bound_for(
             or endpoint.affordance.placement
             or (Placement.PAGE if obj is None else Placement.ITEM)
         ),
+        link_header=(
+            endpoint.affordance.link_header
+            if link_header_override is None
+            else link_header_override
+        ),
     )
 
 
@@ -196,6 +204,7 @@ def bind(
     obj: Model | None = None,
     *,
     placement_override: Placement | None = None,
+    link_header_override: bool | None = None,
 ) -> Bound:
     """Evaluate see-it and use-it for ``url_name`` (bound to ``obj``) against ``request``."""
     endpoint = endpoint_for(url_name)
@@ -209,7 +218,7 @@ def bind(
     else:
         reason = endpoint.use(request, kwargs, obj)
         state = "enabled" if reason is None else "disabled"
-    return bound_for(endpoint, obj, state, reason, placement_override)
+    return bound_for(endpoint, obj, state, reason, placement_override, link_header_override)
 
 
 __all__ = ["Bound", "Endpoint", "bind", "bound_for", "dom_id_for", "endpoint_for"]

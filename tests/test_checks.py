@@ -59,6 +59,18 @@ def test_w002_flags_fields_without_post_handler() -> None:
     assert "f-nopost" in message.msg
 
 
+def test_w003_flags_link_header_without_rel() -> None:
+    messages = messages_for("tests.checks_urls.w003")
+    assert [m.id for m in messages] == ["hypermediator.W003", "hypermediator.W003"]
+    assert all(isinstance(m, Warning) for m in messages)
+    text = " ".join(m.msg for m in messages)
+    assert "SelectedNoRel" in text
+    assert "selected_fn" in text
+    assert "s-norel" in text
+    assert "has no rel" in text
+    assert "SelectedWithRel" not in text
+
+
 def test_e001_flags_unnamed_hypermediator_views() -> None:
     messages = messages_for("tests.checks_urls.e001")
     assert [m.id for m in messages] == ["hypermediator.E001", "hypermediator.E001"]

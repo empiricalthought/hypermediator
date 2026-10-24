@@ -34,7 +34,7 @@ class WidgetRenew(PermissionRequiredMixin, HypermediaMixin, SingleObjectMixin, R
     model = Widget
     permission_required = "tests.change_widget"
     raise_exception = True
-    affordance = Affordance("Renew", rel=("edit",))
+    affordance = Affordance("Renew", rel=("edit",), link_header=True)
 
     def unavailable(self, obj: object | None) -> str | None:
         return retired_reason(obj) if isinstance(obj, Widget) else None
@@ -60,6 +60,7 @@ def widget_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @affordance(
     label="Renew",
     rel=("edit",),
+    link_header=True,
     permission="tests.change_widget",
     model=Widget,
     unavailable=lambda request, widget: retired_reason(widget),
@@ -145,10 +146,21 @@ def pipeline_fbv(request: HttpRequest) -> HttpResponse:
 
 
 class WidgetNext(HypermediaMixin, View):
-    affordance = Affordance("Next", rel=("next", "edit", "https://example.com/rel/x"))
+    affordance = Affordance(
+        "Next", rel=("next", "edit", "https://example.com/rel/x"), link_header=True
+    )
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return HttpResponse("next")
+
+
+class WidgetQuiet(HypermediaMixin, View):
+    """Has a rel but is not selected for the Link header."""
+
+    affordance = Affordance("Quiet", rel=("help",))
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return HttpResponse("quiet")
 
 
 OVERRIDE = Placement(target="#panel", swap="innerHTML", select="#panel")
@@ -156,12 +168,17 @@ OVERRIDE = Placement(target="#panel", swap="innerHTML", select="#panel")
 
 class WidgetPage(HypermediaMixin, View):
     placements = MappingProxyType({"widget-renew": OVERRIDE})
+    link_headers = MappingProxyType({"widget-renew": False, "widget-quiet": True})
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return HttpResponse("page")
 
 
-@affordance(label="Page fn", placements={"widget-renew": OVERRIDE})
+@affordance(
+    label="Page fn",
+    placements={"widget-renew": OVERRIDE},
+    link_headers={"widget-renew": False, "widget-quiet": True},
+)
 def widget_page_fbv(request: HttpRequest) -> HttpResponse:
     return HttpResponse("page")
 

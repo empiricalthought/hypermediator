@@ -1,5 +1,6 @@
 import datetime
 import uuid
+from types import MappingProxyType
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -87,6 +88,8 @@ class LoanedBooksByUserListView(HypermediaMixin, LoginRequiredMixin, generic.Lis
     template_name = "catalog/bookinstance_list_borrowed_user.html"
     paginate_by = 10
     partial = "content"
+    # Renew is advertised in Link on the book page only, not on lists of many copies.
+    link_headers = MappingProxyType({"renew-book-librarian": False})
 
     def get_queryset(self) -> QuerySet[BookInstance]:
         user = self.request.user
@@ -108,6 +111,7 @@ class LoanedBooksAllListView(HypermediaMixin, PermissionRequiredMixin, generic.L
     template_name = "catalog/bookinstance_list_borrowed_all.html"
     paginate_by = 10
     partial = "content"
+    link_headers = MappingProxyType({"renew-book-librarian": False})
 
     def get_queryset(self) -> QuerySet[BookInstance]:
         return BookInstance.objects.filter(status__exact="o").order_by("due_back")
@@ -125,6 +129,7 @@ def on_loan_only(request: HttpRequest, copy: BookInstance | None) -> str | None:
 @affordance(
     label="Renew",
     rel=("https://locallibrary.example/rels/renew",),
+    link_header=True,
     placement=Placement.PAGE,
     permission="catalog.can_mark_returned",
     model=BookInstance,

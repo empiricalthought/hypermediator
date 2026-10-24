@@ -16,7 +16,7 @@ def _link_entries(rendered: list[Bound]) -> list[str]:
     entries: list[str] = []
     for bound in rendered:
         rel = " ".join(bound.endpoint.affordance.rel)
-        if bound.state != "enabled" or not rel:
+        if bound.state != "enabled" or not bound.link_header or not rel:
             continue
         entry = f'<{bound.url}>; rel="{rel}"'
         if entry not in entries:
@@ -33,7 +33,8 @@ def _item_missing(request: HttpRequest, response: HttpResponseBase) -> bool:
 
 
 class HypermediatorMiddleware:
-    """Adds ``Link`` for the enabled affordances a response rendered, and tells htmx to
+    """Adds ``Link`` for the enabled, rel'd affordances a response rendered that are selected
+    for it (``link_header``, as the page may override), and tells htmx to
     swap nothing when the item it asked to refresh is absent from the response."""
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponseBase]) -> None:

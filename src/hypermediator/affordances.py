@@ -37,12 +37,14 @@ def _is_absolute_uri(token: str) -> bool:
 @dataclass(frozen=True)
 class Affordance:
     """A named, labelled control. A ``placement`` of None resolves to ITEM when bound to an
-    object and to PAGE otherwise."""
+    object and to PAGE otherwise. ``link_header`` selects the affordance for the ``Link``
+    header (where it has a rel); a referencing page may override it."""
 
     label: str
     rel: tuple[str, ...] = ()
     placement: Placement | None = None
     trigger: str | None = None
+    link_header: bool = False
 
     def __post_init__(self) -> None:
         if not self.label:

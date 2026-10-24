@@ -40,16 +40,17 @@ def _request(context: template.Context) -> HttpRequest:
     return request
 
 
-def _placement_override(request: HttpRequest, url_name: str) -> Placement | None:
-    """The placement the page's own view declares for ``url_name``, if any."""
+def _page_override(request: HttpRequest, attr: str, url_name: str) -> Any:
+    """What the page's own view declares in its ``attr`` mapping (``placements`` or
+    ``link_headers``) for ``url_name``, if anything."""
     match = request.resolver_match
     if match is None:
         return None
     view_class = getattr(match.func, "view_class", None)
     if isinstance(view_class, type) and issubclass(view_class, HypermediaMixin):
-        return view_class.placements.get(url_name)
+        return getattr(view_class, attr).get(url_name)
     declaration = getattr(match.func, "hypermediator", None)
-    return None if declaration is None else declaration.placements.get(url_name)
+    return None if declaration is None else getattr(declaration, attr).get(url_name)
 
 
 def _hx(bound: Bound, verb: Literal["hx-get", "hx-post"]) -> dict[str, str]:
@@ -105,7 +106,13 @@ def _record(request: HttpRequest, bound: Bound) -> None:
 
 
 def _bind_and_record(request: HttpRequest, url_name: str, obj: Model | None) -> Bound | None:
-    bound = bind(request, url_name, obj, placement_override=_placement_override(request, url_name))
+    bound = bind(
+        request,
+        url_name,
+        obj,
+        placement_override=_page_override(request, "placements", url_name),
+        link_header_override=_page_override(request, "link_headers", url_name),
+    )
     if bound.state == "hidden":
         return None
     _record(request, bound)

@@ -34,6 +34,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("pipeline/fbv/", views.pipeline_fbv, name="pipeline-fbv"),
     path("pipeline/plain/", views.PlainFormView.as_view(), name="pipeline-plain"),
     path("widgets/next/", views.WidgetNext.as_view(), name="widget-next"),
+    path("widgets/quiet/", views.WidgetQuiet.as_view(), name="widget-quiet"),
     path("widgets/page/", views.WidgetPage.as_view(), name="widget-page"),
     path("widgets/page-fn/", views.widget_page_fbv, name="widget-page-fbv"),
     path("renew-form/", views.RenewFormView.as_view(), name="renew-form"),

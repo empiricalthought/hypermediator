@@ -121,17 +121,34 @@ def test_link_header_on_book_detail(
 ) -> None:
     client.force_login(librarian)
     link = client.get(book.get_absolute_url())["Link"]
-    assert f'<{reverse("book-update", kwargs={"pk": book.pk})}>; rel="edit"' in link
     renew = reverse("renew-book-librarian", kwargs={"pk": on_loan_copy.pk})
     assert f'<{renew}>; rel="https://locallibrary.example/rels/renew"' in link
-    # Disabled affordances are not advertised.
+    # Only selected affordances are advertised: book-update (rel edit) is not.
+    assert 'rel="edit"' not in link
     assert reverse("book-delete", kwargs={"pk": book.pk}) not in link
 
 
-def test_link_header_on_author_detail(client: Client, librarian: User, author: Author) -> None:
+@pytest.mark.parametrize("url_name", ["all-borrowed", "my-borrowed"])
+def test_borrowed_lists_override_renew_out_of_link_header(
+    client: Client, librarian: User, on_loan_copy: BookInstance, url_name: str
+) -> None:
+    on_loan_copy.borrower = librarian
+    on_loan_copy.save()
     client.force_login(librarian)
-    link = client.get(author.get_absolute_url())["Link"]
-    assert f'<{reverse("author-update", kwargs={"pk": author.pk})}>; rel="edit"' in link
+    response = client.get(reverse(url_name))
+    assert (
+        reverse("renew-book-librarian", kwargs={"pk": on_loan_copy.pk}) in response.content.decode()
+    )
+    assert "renew" not in response.headers.get("Link", "")
+
+
+def test_no_edit_link_header_on_author_detail(
+    client: Client, librarian: User, author: Author
+) -> None:
+    client.force_login(librarian)
+    response = client.get(author.get_absolute_url())
+    assert reverse("author-update", kwargs={"pk": author.pk}) in response.content.decode()
+    assert 'rel="edit"' not in response.headers.get("Link", "")
 
 
 def test_vary_on_hypermediator_pages(client: Client, librarian: User, pages: Pages) -> None:

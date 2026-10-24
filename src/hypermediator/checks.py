@@ -50,6 +50,19 @@ def check_declarations(
                     id="hypermediator.E001",
                 )
             )
+        selected = declaration.affordance if declaration is not None else None
+        if selected is None:
+            selected = getattr(view_class, "affordance", None)
+        if selected is not None and selected.link_header and not selected.rel:
+            messages.append(
+                Warning(
+                    f"{_describe(obj)} ('{label}') is selected for the Link header but has no "
+                    "rel; nothing will be emitted.",
+                    hint="Give the affordance a rel=, or remove link_header=True.",
+                    obj=obj,
+                    id="hypermediator.W003",
+                )
+            )
         if declaration is not None:
             if declaration.unavailable is not None and declaration.model is None:
                 messages.append(
