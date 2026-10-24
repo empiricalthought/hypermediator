@@ -153,3 +153,14 @@ def test_hx_elements_recorded() -> None:
         ("input", {"hx-post": "/z/"}, True),
         ("span", {"hx-get": "/b/"}, False),
     )
+
+
+def test_element_rel_excludes_microdata_rels() -> None:
+    page = extract(
+        '<span class="hm-control" id="w"><a id="w-c" href="/x/" rel="next">Go</a>'
+        + _meta("go", "w-c", RENEW)
+        + "</span>"
+    )
+    (control,) = page.controls
+    assert control.element_rel == ("next",)
+    assert control.rel == ("next", RENEW)

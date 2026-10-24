@@ -51,6 +51,7 @@ class Control:
     href: str | None
     method: str
     rel: tuple[str, ...]
+    element_rel: tuple[str, ...]
     label: str
     enabled: bool
     reason: str | None
@@ -223,7 +224,8 @@ class _Extractor:
         is_form = node.tag == "form"
         element_id = node.attrs.get("id")
         name, micro_rels = self.microdata.get(element_id or "", (None, ()))
-        rel = tuple(dict.fromkeys(_tokens(node.attrs.get("rel")) + micro_rels))
+        element_rel = _tokens(node.attrs.get("rel"))
+        rel = tuple(dict.fromkeys(element_rel + micro_rels))
         wrapper = next(
             (a for a in node.ancestors() if "hm-control" in _tokens(a.attrs.get("class"))), None
         )
@@ -255,6 +257,7 @@ class _Extractor:
             href=href,
             method=method,
             rel=rel,
+            element_rel=element_rel,
             label=label,
             enabled=enabled,
             reason=reason,

@@ -212,3 +212,9 @@ class ThingEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[
     template_name = "concurrency/thing_form.html"
     success_url = "/widgets/"
     affordance = Affordance("Edit thing")
+
+
+def mutating_get(request: HttpRequest) -> HttpResponse:
+    """A GET that wrongly changes state, for the state-safety assertion."""
+    Widget.objects.create(name="created by GET")
+    return HttpResponse("mutated")
