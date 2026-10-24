@@ -1,6 +1,7 @@
 SECRET_KEY = "tests-only"
 DEBUG = False
 USE_TZ = True
+STATIC_URL = "/static/"
 ROOT_URLCONF = "tests.urls"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -9,6 +10,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.messages",
     "django.contrib.sessions",
+    "django.contrib.staticfiles",
     "hypermediator",
     "tests",
 ]

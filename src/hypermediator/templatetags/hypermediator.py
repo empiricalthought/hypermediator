@@ -20,6 +20,7 @@ from django.utils.safestring import SafeString
 
 from hypermediator.affordances import Placement
 from hypermediator.endpoints import Bound, bind
+from hypermediator.htmx import HTMX_SHA256
 from hypermediator.microdata import ITEMTYPE
 from hypermediator.rels import html_rels
 from hypermediator.views import HypermediaMixin
@@ -194,3 +195,9 @@ def hm_form(
 @register.simple_tag
 def hm_item(obj: Model) -> SafeString:
     return format_html(' data-hm-item="{}"', item_key(obj))
+
+
+@register.simple_tag
+def hm_htmx() -> SafeString:
+    """The ``<script>`` tag for the vendored, pinned htmx, with its integrity hash."""
+    return render_to_string("hypermediator/htmx.html", {"integrity": HTMX_SHA256})

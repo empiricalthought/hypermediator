@@ -34,3 +34,7 @@ def redirect_to_location(response: HttpResponseBase) -> HttpResponseBase:
     for key, morsel in response.cookies.items():
         converted.cookies[key] = morsel
     return converted
+
+
+HTMX_VERSION = "4.0.0"
+HTMX_SHA256 = "sha256-5ITZFxqdswo5yPFuPXCdQTfzIRxln45hJYFmNQM9WT8="
