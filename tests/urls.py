@@ -27,5 +27,6 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("widgets/page/", views.WidgetPage.as_view(), name="widget-page"),
     path("widgets/page-fn/", views.widget_page_fbv, name="widget-page-fbv"),
     path("renew-form/", views.RenewFormView.as_view(), name="renew-form"),
+    path("widgets/odd/", views.WidgetOdd.as_view(), name="widget-odd"),
     path("plain/", views.WidgetUndeclared.as_view(), name="widget-plain"),
 ]

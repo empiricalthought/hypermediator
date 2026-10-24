@@ -168,3 +168,16 @@ class RenewFormView(HypermediaMixin, FormView):  # type: ignore[type-arg]
     template_name = "tags/renew.html"
     success_url = "/widgets/"
     affordance = Affordance("Renew book")
+
+
+ODD = "<b>\"&'"
+
+
+class WidgetOdd(HypermediaMixin, View):
+    affordance = Affordance(ODD)
+
+    def unavailable(self, obj: object | None) -> str | None:
+        return ODD
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return HttpResponse("odd")

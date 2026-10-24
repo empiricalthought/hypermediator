@@ -1,3 +1,5 @@
+import dataclasses
+import json
 from html.parser import HTMLParser
 
 import pytest
@@ -8,8 +10,9 @@ from django.template import engines
 from django.test import Client, RequestFactory
 from django.urls import resolve
 
-from hypermediator.endpoints import Bound
+from hypermediator.endpoints import Bound, bind
 from hypermediator.extract import Control, extract
+from hypermediator.templatetags.hypermediator import _hx
 from tests.models import Widget
 from tests.views import OVERRIDE, RenewForm
 
@@ -216,3 +219,36 @@ def test_rendered_recorded_on_request(widget: Widget) -> None:
     hidden_request = make_request()
     render("{% hm_link 'widget-renew' w %}", hidden_request, w=widget)
     assert getattr(hidden_request, "_hm_rendered", []) == []
+
+
+def test_disabled_form_has_no_hx_and_describes_button() -> None:
+    Widget.objects.create(name="f", status="full")
+    html = render("{% hm_form 'widget-create' form %}", make_request(), form=RenewForm())
+    control = only(html, "widget-create")
+    assert not control.enabled
+    assert control.hx == {}
+    assert control.reason == "Creation is closed"
+    assert 'aria-describedby="hm-widget-create-reason"' in html
+    assert 'rel="' not in html.split("<form")[1].split(">")[0]
+
+
+def test_enabled_form_has_no_rel_attribute() -> None:
+    html = render("{% hm_form 'renew-form' form %}", make_request(), form=RenewForm())
+    assert "rel=" not in html.split("<form")[1].split(">")[0]
+
+
+def test_hx_values_are_escaped_for_json_and_css(widget: Widget) -> None:
+    bound = bind(make_request(can_change=True), "widget-renew", widget)
+    nasty = dataclasses.replace(bound, obj=Widget(pk='a"b\\c'))
+    hx = _hx(nasty, "hx-get")
+    key = 'tests.widget:a"b\\c'
+    assert json.loads(hx["hx-headers"]) == {"HX-Hm-Item": key}
+    assert hx["hx-select"] == '[data-hm-item="tests.widget:a\\"b\\\\c"]'
+
+
+def test_label_and_reason_are_escaped() -> None:
+    html = render("{% hm_link 'widget-odd' %}", make_request())
+    assert "<b>" not in html
+    control = only(html, "widget-odd")
+    assert control.label == "<b>\"&'"
+    assert control.reason == "<b>\"&'"

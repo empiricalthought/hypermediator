@@ -5,6 +5,7 @@ produce the markup."""
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
 from django import template
@@ -57,7 +58,8 @@ def _hx(bound: Bound, verb: Literal["hx-get", "hx-post"]) -> dict[str, str]:
     key = None if bound.obj is None else item_key(bound.obj)
     if placement.select == "item":
         if key is not None:
-            hx["hx-select"] = f'[data-hm-item="{key}"]'
+            css_key = key.replace("\\", "\\\\").replace('"', '\\"')
+            hx["hx-select"] = f'[data-hm-item="{css_key}"]'
     elif placement.select is not None:
         hx["hx-select"] = placement.select
     if placement.push_url:
@@ -65,7 +67,7 @@ def _hx(bound: Bound, verb: Literal["hx-get", "hx-post"]) -> dict[str, str]:
     if bound.endpoint.affordance.trigger:
         hx["hx-trigger"] = bound.endpoint.affordance.trigger
     if placement == Placement.ITEM and key is not None:
-        hx["hx-headers"] = f'{{"HX-Hm-Item": "{key}"}}'
+        hx["hx-headers"] = json.dumps({"HX-Hm-Item": key})
     return hx
 
 
@@ -109,6 +111,19 @@ def _bind_and_record(request: HttpRequest, url_name: str, obj: Model | None) -> 
     return bound
 
 
+def _form_hx(bound: Bound) -> dict[str, str]:
+    """A full form always targets itself; a disabled one carries no htmx attributes."""
+    if bound.state != "enabled":
+        return {}
+    selector = f"#{bound.dom_id}"
+    return {
+        "hx-post": bound.url,
+        "hx-target": selector,
+        "hx-swap": "outerHTML",
+        "hx-select": selector,
+    }
+
+
 def render_link(request: HttpRequest, bound: Bound) -> SafeString:
     """The link control (wrapper, link or disabled link, reason, microdata) for ``bound``."""
     return _render("hypermediator/link.html", request, bound, "a", hx=_hx(bound, "hx-get"))
@@ -140,7 +155,7 @@ def hm_form(
     bound = _bind_and_record(request, url_name, obj)
     if bound is None:
         return ""
-    return _render("hypermediator/form.html", request, bound, "form", form=form)
+    return _render("hypermediator/form.html", request, bound, "form", form=form, hx=_form_hx(bound))
 
 
 @register.simple_tag
