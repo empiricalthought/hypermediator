@@ -28,6 +28,9 @@ def redirect_to_location(response: HttpResponseBase) -> HttpResponseBase:
         return response
     converted = HttpResponse(status=200)
     converted.headers["HX-Location"] = location
+    for header, value in response.headers.items():
+        if header.lower() not in ("location", "content-length"):
+            converted.headers[header] = value
     for key, morsel in response.cookies.items():
         converted.cookies[key] = morsel
     return converted

@@ -105,28 +105,19 @@ class HypermediaMixin:
         )
         return finish_response(request, response, placement)
 
-    def render_to_response(self, context: dict[str, Any], **response_kwargs: Any) -> HttpResponse:
-        """Render the declared partial for a partial request, else the whole template."""
+    def get_template_names(self) -> list[str]:
+        """The declared partial of each template, for a partial request."""
+        names: list[str] = super().get_template_names()  # type: ignore[misc]
         request: HttpRequest = self.request  # type: ignore[attr-defined]
         if self.partial is None or not is_partial(request):
-            response: HttpResponse = super().render_to_response(  # type: ignore[misc]
-                context, **response_kwargs
-            )
-            return response
-        names = [partial_name(request, name, self.partial) for name in self.get_template_names()]  # type: ignore[attr-defined]
-        response_kwargs.setdefault("content_type", getattr(self, "content_type", None))
-        return self.response_class(  # type: ignore[attr-defined,no-any-return]
-            request=request,
-            template=names,
-            context=context,
-            using=getattr(self, "template_engine", None),
-            **response_kwargs,
-        )
+            return names
+        return [partial_name(request, name, self.partial) for name in names]
 
     def form_invalid(self, form: BaseForm) -> HttpResponse:
         """An invalid submit is a 422, so htmx swaps the re-rendered form."""
         context = self.get_context_data(form=form)  # type: ignore[attr-defined]
-        return self.render_to_response(context, status=422)
+        response: HttpResponse = self.render_to_response(context, status=422)  # type: ignore[attr-defined]
+        return response
 
     def _guarded(self, handler: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:
         @functools.wraps(handler)

@@ -1,4 +1,10 @@
+import pytest
+from django.contrib.auth.models import Permission, User
+from django.http import HttpResponse
 from django.test import Client
+
+from hypermediator.htmx import redirect_to_location
+from tests.models import Widget
 
 HX = {"HX-Request": "true"}
 PARTIAL = {"HX-Request": "true", "HX-Request-Type": "partial"}
@@ -41,4 +47,39 @@ def test_page_placement_redirect_becomes_hx_location(client: Client) -> None:
 def test_plain_django_view_untouched(client: Client) -> None:
     response = client.post("/pipeline/plain/", {}, headers=HX)
     assert response.status_code == 200
-    assert "Vary" not in response.headers or "HX-Request" not in response["Vary"]
+    assert "HX-Request" not in response.headers.get("Vary", "")
+
+
+def test_invalid_partial_post_is_422_with_partial_body(client: Client) -> None:
+    for url in ("/pipeline/cbv/", "/pipeline/fbv/"):
+        response = client.post(url, {}, headers=PARTIAL)
+        assert response.status_code == 422
+        body = response.content.decode()
+        assert body.startswith('<form id="f">')
+        assert "<html>" not in body
+
+
+def test_redirect_conversion_keeps_other_headers() -> None:
+    redirect = HttpResponse(status=302, headers={"Location": "/x/", "X-Custom": "1"})
+    converted = redirect_to_location(redirect)
+    assert converted.status_code == 200
+    assert converted["HX-Location"] == "/x/"
+    assert converted["X-Custom"] == "1"
+    assert "Location" not in converted.headers
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("headers", [{}, PARTIAL])
+def test_use_it_409_is_always_a_standalone_document(headers: dict[str, str]) -> None:
+    widget = Widget.objects.create(name="w", status="retired")
+    user = User.objects.create_user("editor", password="pw")
+    user.user_permissions.add(Permission.objects.get(codename="change_widget"))
+    client = Client()
+    client.force_login(user)
+    response = client.post(f"/widget/{widget.pk}/renew/", headers=headers)
+    assert response.status_code == 409
+    body = response.content.decode()
+    assert body.lower().startswith("<!doctype html")
+    assert f'id="hm-widget-renew-{widget.pk}"' in body
+    assert ("HX-Retarget" in response.headers) == bool(headers)
+    assert ("HX-Reselect" in response.headers) == bool(headers)
