@@ -82,19 +82,17 @@ def _render(
     **extra: Any,
 ) -> SafeString:
     affordance = bound.endpoint.affordance
-    return SafeString(  # nosec B703 B308
-        render_to_string(
-            template_name,
-            {
-                "bound": bound,
-                "label": affordance.label,
-                "rels": affordance.rel,
-                "html_rel": " ".join(html_rels(affordance.rel, element)),
-                "itemtype": ITEMTYPE,
-                **extra,
-            },
-            request=request,
-        )
+    return render_to_string(
+        template_name,
+        {
+            "bound": bound,
+            "label": affordance.label,
+            "rels": affordance.rel,
+            "html_rel": " ".join(html_rels(affordance.rel, element)),
+            "itemtype": ITEMTYPE,
+            **extra,
+        },
+        request=request,
     )
 
 

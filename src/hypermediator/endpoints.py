@@ -19,8 +19,10 @@ State = Literal["enabled", "disabled", "hidden"]
 
 
 def dom_id_for(name: str, obj: Model | None = None) -> str:
-    """The wrapper id: ``hm-{name}``, or ``hm-{name}-{pk}`` when bound to an object."""
-    return f"hm-{name}" if obj is None else f"hm-{name}-{obj.pk}"
+    """The wrapper id: ``hm-{name}``, or ``hm-{name}-{pk}`` when bound to an object. A
+    namespace's ``:`` becomes ``-``, so the id is usable as a CSS selector."""
+    base = f"hm-{name.replace(':', '-')}"
+    return base if obj is None else f"{base}-{obj.pk}"
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,21 @@ class Endpoint:
     view_class: type | None = field(default=None, compare=False, repr=False)
     view_initkwargs: Mapping[str, Any] = field(default_factory=dict, compare=False, repr=False)
     declaration: FunctionDeclaration | None = field(default=None, compare=False, repr=False)
+    route_kwargs: frozenset[str] = field(default=frozenset(), compare=False, repr=False)
+
+    def url_kwargs(self, obj: Model | None) -> dict[str, Any]:
+        """The URL kwargs that identify ``obj`` on this endpoint's route."""
+        if obj is None:
+            return {}
+        if self.declaration is not None:
+            custom = self.declaration.url_kwargs
+            return {"pk": obj.pk} if custom is None else dict(custom(obj))
+        pk_kwarg: str = getattr(self.view_class, "pk_url_kwarg", "pk")
+        if pk_kwarg in self.route_kwargs:
+            return {pk_kwarg: obj.pk}
+        slug_kwarg: str = getattr(self.view_class, "slug_url_kwarg", "slug")
+        slug_field: str = getattr(self.view_class, "slug_field", "slug")
+        return {slug_kwarg: getattr(obj, slug_field)}
 
     def _instantiate(self, request: HttpRequest, kwargs: Mapping[str, Any]) -> Any:
         assert self.view_class is not None  # nosec B101
@@ -91,18 +108,20 @@ def url_routes() -> Iterator[tuple[str | None, URLPattern]]:
     return walk(get_resolver().url_patterns, "")
 
 
-def _find_callback(url_name: str) -> Callable[..., Any]:
-    """The callback of the route with this (namespaced) name; no URL kwargs are needed."""
+def _find_route(url_name: str) -> URLPattern:
+    """The route with this (namespaced) name; no URL kwargs are needed."""
     for name, pattern in url_routes():
         if name == url_name:
-            return pattern.callback
+            return pattern
     raise NoReverseMatch(f"Reverse for '{url_name}' not found.")
 
 
 @functools.cache
 def endpoint_for(url_name: str) -> Endpoint | None:
     """The endpoint behind a URL name, or None when its view declares no affordance."""
-    func = _find_callback(url_name)
+    route = _find_route(url_name)
+    func: Callable[..., Any] = route.callback
+    route_kwargs = frozenset(route.pattern.regex.groupindex)
     declaration: FunctionDeclaration | None = getattr(func, "hypermediator", None)
     if declaration is not None:
         return Endpoint(
@@ -111,6 +130,7 @@ def endpoint_for(url_name: str) -> Endpoint | None:
             methods=frozenset({"GET", "POST"}),
             has_fields=declaration.form_class is not None,
             declaration=declaration,
+            route_kwargs=route_kwargs,
         )
     view_class: type | None = getattr(func, "view_class", None)
     affordance = getattr(view_class, "affordance", None)
@@ -126,6 +146,7 @@ def endpoint_for(url_name: str) -> Endpoint | None:
         ),
         view_class=view_class,
         view_initkwargs=getattr(func, "view_initkwargs", {}),
+        route_kwargs=route_kwargs,
     )
 
 
@@ -135,6 +156,30 @@ def _reset_cache(*, setting: str, **kwargs: object) -> None:
 
 
 setting_changed.connect(_reset_cache)
+
+
+def bound_for(
+    endpoint: Endpoint,
+    obj: Model | None,
+    state: State,
+    reason: str | None,
+    placement: Placement | None = None,
+) -> Bound:
+    """``endpoint`` bound to ``obj``: its URL, wrapper id and placement (declared, else ITEM
+    for an object and PAGE otherwise)."""
+    return Bound(
+        endpoint=endpoint,
+        url=reverse(endpoint.name, kwargs=endpoint.url_kwargs(obj)),
+        obj=obj,
+        state=state,
+        reason=reason,
+        dom_id=dom_id_for(endpoint.name, obj),
+        placement=(
+            placement
+            or endpoint.affordance.placement
+            or (Placement.PAGE if obj is None else Placement.ITEM)
+        ),
+    )
 
 
 def bind(
@@ -148,12 +193,7 @@ def bind(
     endpoint = endpoint_for(url_name)
     if endpoint is None:
         raise LookupError(f"The view named {url_name!r} declares no affordance")
-    kwargs: dict[str, Any] = {} if obj is None else {"pk": obj.pk}
-    placement = (
-        placement_override
-        or endpoint.affordance.placement
-        or (Placement.PAGE if obj is None else Placement.ITEM)
-    )
+    kwargs = endpoint.url_kwargs(obj)
     state: State
     reason: str | None = None
     if not endpoint.see(request, kwargs):
@@ -161,15 +201,7 @@ def bind(
     else:
         reason = endpoint.use(request, kwargs, obj)
         state = "enabled" if reason is None else "disabled"
-    return Bound(
-        endpoint=endpoint,
-        url=reverse(url_name, kwargs=kwargs),
-        obj=obj,
-        state=state,
-        reason=reason,
-        dom_id=dom_id_for(url_name, obj),
-        placement=placement,
-    )
+    return bound_for(endpoint, obj, state, reason, placement_override)
 
 
-__all__ = ["Bound", "Endpoint", "bind", "dom_id_for", "endpoint_for"]
+__all__ = ["Bound", "Endpoint", "bind", "bound_for", "dom_id_for", "endpoint_for"]

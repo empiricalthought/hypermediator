@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
+import re
 from collections import Counter
-from collections.abc import Iterable
-from typing import Literal, cast
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, Literal, cast
 
 from django.apps import apps
-from django.db.models import Count, Max, Model
+from django.db import connections
+from django.db.models import Model
 from django.http import HttpResponse
 from django.http.response import HttpResponseBase
 from django.test import Client
@@ -192,34 +195,56 @@ def assert_allow_matches(client: Client, path: str, url_name: str) -> None:
         )
 
 
-def _snapshot(exclude: frozenset[type[Model]]) -> dict[str, tuple[int, object]]:
-    snapshot: dict[str, tuple[int, object]] = {}
-    for model in apps.get_models():
-        if model in exclude or not model._meta.managed or model._meta.proxy:
-            continue
-        totals = model._default_manager.aggregate(count=Count("pk"), top=Max("pk"))
-        snapshot[model._meta.label] = (totals["count"], totals["top"])
-    return snapshot
+_WRITE = re.compile(
+    r"""^\s*(?:(INSERT)\s+(?:OR\s+\w+\s+)?INTO|(UPDATE)(?:\s+OR\s+\w+)?|(DELETE)\s+FROM)\s+
+    ["`\[]?([^\s"`\]()]+)""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _table_labels() -> dict[str, str]:
+    return {m._meta.db_table: m._meta.label for m in apps.get_models(include_auto_created=True)}
+
+
+class _WriteRecorder:
+    """An ``execute_wrapper`` that records each INSERT, UPDATE or DELETE outside ``skipped``."""
+
+    def __init__(self, skipped: frozenset[str]) -> None:
+        self.skipped = skipped
+        self.writes: list[str] = []
+
+    def __call__(
+        self,
+        execute: Callable[..., Any],
+        sql: str,
+        params: Any,
+        many: bool,
+        context: Mapping[str, Any],
+    ) -> Any:
+        match = _WRITE.match(sql)
+        if match:
+            verb = next(v for v in match.groups()[:3] if v).upper()
+            table = match.group(4)
+            if table not in self.skipped:
+                label = _table_labels().get(table)
+                self.writes.append(f"{verb} on {table}" + (f" ({label})" if label else ""))
+        return execute(sql, params, many, context)
 
 
 def assert_get_does_not_change_state(
     client: Client, path: str, *, exclude: Iterable[type[Model]] = ()
 ) -> HttpResponseBase:
-    """A GET succeeds and leaves every model's row count and highest pk unchanged.
+    """A GET succeeds and issues no INSERT, UPDATE or DELETE.
 
-    Models in ``exclude`` are not snapshotted, for state a GET legitimately writes, such as
-    the session."""
-    skipped = frozenset(exclude)
-    before = _snapshot(skipped)
-    response = client.get(path)
-    after = _snapshot(skipped)
+    Writes to the tables of models in ``exclude`` are allowed, for state a GET legitimately
+    writes, such as the session."""
+    recorder = _WriteRecorder(frozenset(model._meta.db_table for model in exclude))
+    with contextlib.ExitStack() as stack:
+        for connection in connections.all():
+            stack.enter_context(connection.execute_wrapper(recorder))
+        response = client.get(path)
     if response.status_code >= 400:
         raise AssertionError(f"GET {path} returned {response.status_code}")
-    changed = [
-        f"{label}: {before[label]} -> {after[label]}"
-        for label in before
-        if before[label] != after[label]
-    ]
-    if changed:
-        raise AssertionError(f"GET {path} changed state:\n" + "\n".join(changed))
+    if recorder.writes:
+        raise AssertionError(f"GET {path} changed state:\n" + "\n".join(recorder.writes))
     return response

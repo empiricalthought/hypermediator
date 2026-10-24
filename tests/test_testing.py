@@ -259,3 +259,11 @@ def test_get_state_exclude_skips_listed_models(client: Client) -> None:
     with pytest.raises(AssertionError, match=r"tests\.Widget"):
         assert_get_does_not_change_state(client, "/mutating/")
     assert_get_does_not_change_state(client, "/mutating/", exclude=(Widget,))
+
+
+@pytest.mark.django_db
+def test_get_state_catches_an_update_to_an_existing_row(client: Client) -> None:
+    Widget.objects.create(name="w")
+    with pytest.raises(AssertionError, match=r"UPDATE.*tests_widget"):
+        assert_get_does_not_change_state(client, "/saving/")
+    assert_get_does_not_change_state(client, "/saving/", exclude=(Widget,))

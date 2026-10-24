@@ -18,7 +18,8 @@ def test_vendored_file_matches_hash() -> None:
 def test_tag_renders_integrity() -> None:
     html = engines["django"].from_string("{% load hypermediator %}{% hm_htmx %}").render({})
     assert html == (
-        f'<script src="/static/hypermediator/htmx.min.js" integrity="{HTMX_SHA256}" defer></script>'
+        f'<script src="/static/hypermediator/htmx.min.js" integrity="{HTMX_SHA256}" '
+        'crossorigin="anonymous" defer></script>'
     )
 
 

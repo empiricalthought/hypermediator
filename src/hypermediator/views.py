@@ -14,12 +14,11 @@ from django.forms import BaseForm
 from django.http import HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, render
-from django.urls import reverse
 from django.views.generic.detail import SingleObjectMixin
 
 from hypermediator.affordances import Affordance, Placement
-from hypermediator.htmx import is_partial
-from hypermediator.shortcuts import finish_response, partial_name, resolve_placement
+from hypermediator.htmx import is_htmx, is_partial
+from hypermediator.shortcuts import finish_response, handler_redirect, partial_name
 
 if TYPE_CHECKING:
     from hypermediator.endpoints import Endpoint
@@ -39,25 +38,18 @@ class FunctionDeclaration:
     partial: str | None = None
     placements: Mapping[str, Placement] = MappingProxyType({})
     form_class: type[BaseForm] | None = None
+    url_kwargs: Callable[[Any], Mapping[str, Any]] | None = None
 
 
 def unavailable_response(
     request: HttpRequest, endpoint: Endpoint, obj: Model | None, reason: str
 ) -> HttpResponse:
     """The 409 for a use-it failure on submit: the disabled control, with the page's wrapper id."""
-    from hypermediator.endpoints import Bound, dom_id_for
+    from hypermediator.endpoints import bound_for
     from hypermediator.templatetags.hypermediator import render_link
 
-    dom_id = dom_id_for(endpoint.name, obj)
-    bound = Bound(
-        endpoint=endpoint,
-        url=reverse(endpoint.name, kwargs={} if obj is None else {"pk": obj.pk}),
-        obj=obj,
-        state="disabled",
-        reason=reason,
-        dom_id=dom_id,
-        placement=Placement.PAGE if obj is None else Placement.ITEM,
-    )
+    bound = bound_for(endpoint, obj, "disabled", reason)
+    dom_id = bound.dom_id
     get_absolute_url = getattr(obj, "get_absolute_url", None)
     response = render(
         request,
@@ -69,7 +61,7 @@ def unavailable_response(
         },
         status=409,
     )
-    if request.headers.get("HX-Request") == "true":
+    if is_htmx(request):
         response.headers["HX-Retarget"] = f"#{dom_id}"
         response.headers["HX-Reswap"] = "outerHTML"
         response.headers["HX-Reselect"] = f"#{dom_id}"
@@ -106,10 +98,7 @@ class HypermediaMixin:
             if handler is not None:
                 setattr(self, method, self._guarded(handler))
         response: HttpResponseBase = super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
-        placement = resolve_placement(
-            self.affordance.placement if self.affordance else None, getattr(self, "kwargs", {})
-        )
-        return finish_response(request, response, placement)
+        return finish_response(request, response)
 
     def get_template_names(self) -> list[str]:
         """The declared partial of each template, for a partial request."""
@@ -132,7 +121,8 @@ class HypermediaMixin:
             reason = self.unavailable(obj)
             if reason is not None:
                 return unavailable_response(request, _current_endpoint(request), obj, reason)
-            return handler(request, *args, **kwargs)
+            # Only the handler's own redirect is converted; an auth mixin's is Django's.
+            return handler_redirect(request, handler(request, *args, **kwargs))
 
         return guarded
 
@@ -158,9 +148,14 @@ def affordance(
     partial: str | None = None,
     placements: Mapping[str, Placement] | None = None,
     form_class: type[BaseForm] | None = None,
+    url_kwargs: Callable[[Any], Mapping[str, Any]] | None = None,
 ) -> Callable[[_V], _V]:
-    """Declare an affordance on a function view, enforcing ``permission`` (403) and, on POST,
-    ``unavailable`` (409)."""
+    """Declare an affordance on a function view, enforcing ``permission`` (a login redirect
+    for an anonymous user, else 403, as ``permission_required``) and, on every unsafe method,
+    ``unavailable`` (409). ``url_kwargs`` maps a bound object to the route's URL kwargs
+    (default ``{"pk": obj.pk}``)."""
+    if isinstance(rel, str):
+        raise TypeError(f"Affordance rel must be a sequence of tokens, not {rel!r}")
     permissions = (permission,) if isinstance(permission, str) else tuple(permission or ())
     declaration = FunctionDeclaration(
         affordance=Affordance(label=label, rel=tuple(rel), placement=placement, trigger=trigger),
@@ -170,14 +165,21 @@ def affordance(
         partial=partial,
         placements=MappingProxyType(dict(placements or {})),
         form_class=form_class,
+        url_kwargs=url_kwargs,
     )
 
     def decorator(view: _V) -> _V:
         @functools.wraps(view)
         def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
             if permissions and not request.user.has_perms(permissions):
+                if not request.user.is_authenticated:
+                    # Imported here: auth's views load its models, which need the app registry.
+                    from django.contrib.auth.views import redirect_to_login
+
+                    return finish_response(request, redirect_to_login(request.get_full_path()))
                 raise PermissionDenied
-            if request.method == "POST" and unavailable is not None:
+            method = (request.method or "").lower()
+            if method not in _SAFE_METHODS and unavailable is not None:
                 obj: Model | None = None
                 if model is not None:
                     if "pk" not in kwargs:
@@ -185,10 +187,12 @@ def affordance(
                     obj = get_object_or_404(model, pk=kwargs["pk"])
                 reason = unavailable(request, obj)
                 if reason is not None:
-                    return unavailable_response(request, _current_endpoint(request), obj, reason)
-            response = view(request, *args, **kwargs)
+                    response = unavailable_response(
+                        request, _current_endpoint(request), obj, reason
+                    )
+                    return finish_response(request, response)
             return finish_response(
-                request, response, resolve_placement(declaration.affordance.placement, kwargs)
+                request, handler_redirect(request, view(request, *args, **kwargs))
             )
 
         wrapper.hypermediator = declaration  # type: ignore[attr-defined]

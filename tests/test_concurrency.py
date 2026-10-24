@@ -263,3 +263,23 @@ def test_check_and_save_share_one_locked_atomic_block(client: Client, widget: Wi
         pre_save.disconnect(saving, sender=Widget)
     assert response.status_code == 302
     assert events == [("enter", 1), ("lock", 1), ("save", 1)]
+
+
+@pytest.mark.django_db
+def test_htmx_submit_of_default_placement_form_navigates(client: Client, widget: Widget) -> None:
+    # placement=None on a pk URL: the full form targets itself, so a success redirect must not
+    # be followed into the swap. Only an item refresh (HX-Hm-Item) follows it.
+    url = URL.format(widget.pk)
+    response = client.post(
+        url, {"name": "Mine", "_hm_fingerprint": token(client, widget)}, headers=HX
+    )
+    assert response.status_code == 200
+    assert response["HX-Location"] == "/widgets/"
+    assert "Location" not in response.headers
+    item = HX | {"HX-Hm-Item": f"tests.widget:{widget.pk}"}
+    followed = client.post(
+        url, {"name": "Again", "_hm_fingerprint": token(client, widget)}, headers=item
+    )
+    assert followed.status_code == 302
+    assert followed["Location"] == "/widgets/"
+    assert "HX-Location" not in followed.headers

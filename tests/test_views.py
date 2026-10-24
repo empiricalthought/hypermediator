@@ -261,3 +261,100 @@ def test_options_allow_equals_plain_django(widget: Widget) -> None:
     ours = Client().options(reverse("widget-view", args=[widget.pk]))
     plain = Client().options(reverse("widget-plain-view", args=[widget.pk]))
     assert set(ours["Allow"].split(", ")) == set(plain["Allow"].split(", "))
+
+
+HX = {"HX-Request": "true"}
+
+
+def _vary(response: object) -> set[str]:
+    header: str = getattr(response, "headers", {}).get("Vary", "")
+    return {token.strip() for token in header.split(",")}
+
+
+def test_fbv_409_carries_vary(widget: Widget) -> None:
+    widget.status = "retired"
+    widget.save()
+    client = Client()
+    client.force_login(make_user("editor", can_change=True))
+    response = client.post(reverse("widget-renew-fbv", args=[widget.pk]))
+    assert response.status_code == 409
+    assert {"HX-Request", "HX-Request-Type"} <= _vary(response)
+
+
+def test_fbv_use_it_guards_every_unsafe_method() -> None:
+    gadget = Gadget.objects.create(status="retired")
+    url = reverse("gadget-renew", args=[gadget.pk])
+    for method in ("delete", "put", "patch"):
+        assert getattr(Client(), method)(url).status_code == 409, method
+    assert Client().get(url).status_code == 200
+
+
+def test_namespaced_dom_id_is_a_valid_css_id(widget: Widget) -> None:
+    bound = bind(request_for(make_user("ns", can_change=True)), "ns:renew", widget)
+    assert bound.dom_id == f"hm-ns-renew-{widget.pk}"
+    widget.status = "retired"
+    widget.save()
+    client = Client()
+    client.force_login(make_user("editor", can_change=True))
+    response = client.post(reverse("ns:renew", args=[widget.pk]), headers=HX)
+    assert response.status_code == 409
+    assert response["HX-Retarget"] == f"#hm-ns-renew-{widget.pk}"
+    [control] = extract(response.content.decode()).by_name("ns:renew")
+    assert control.wrapper_id == f"hm-ns-renew-{widget.pk}"
+
+
+def test_slug_routed_cbv_binds_renders_and_refuses() -> None:
+    from django.template import engines
+
+    widget = Widget.objects.create(name="sprocket")
+    url = reverse("widget-renew-slug", kwargs={"slug": "sprocket"})
+    request = request_for(None)
+    bound = bind(request, "widget-renew-slug", widget)
+    assert bound.url == url
+    html = (
+        engines["django"]
+        .from_string("{% load hypermediator %}{% hm_link 'widget-renew-slug' w %}")
+        .render({"request": request, "w": widget})
+    )
+    [link] = extract(html).by_name("widget-renew-slug")
+    assert link.href == url
+
+    widget.status = "retired"
+    widget.save()
+    response = Client().post(url)
+    assert response.status_code == 409
+    [control] = extract(response.content.decode()).by_name("widget-renew-slug")
+    assert control.reason == "Retired widgets cannot be renewed"
+    assert control.wrapper_id == f"hm-widget-renew-slug-{widget.pk}"
+
+
+def test_fbv_permission_anonymous_redirects_to_login_like_django() -> None:
+    url = reverse("widget-guarded-fbv")
+    response = Client().get(f"{url}?x=1")
+    assert response.status_code == 302
+    assert response["Location"] == "/accounts/login/?next=/widgets/guarded-fn/%3Fx%3D1"
+    client = Client()
+    client.force_login(make_user("nobody"))
+    assert client.get(url).status_code == 403
+    editor = Client()
+    editor.force_login(make_user("editor", can_change=True))
+    assert editor.get(url).status_code == 200
+
+
+def test_htmx_post_auth_mixin_redirect_is_not_converted() -> None:
+    url = reverse("widget-login-post")
+    response = Client().post(url, headers=HX)
+    assert response.status_code == 302
+    assert response["Location"] == f"/accounts/login/?next={url}"
+    assert "HX-Location" not in response.headers
+    client = Client()
+    client.force_login(make_user("member"))
+    converted = client.post(url, headers=HX)
+    assert converted.status_code == 200
+    assert converted["HX-Location"] == "/widgets/"
+
+
+def test_fbv_url_kwargs_maps_the_object_to_its_route() -> None:
+    widget = Widget.objects.create(name="sprocket")
+    bound = bind(request_for(None), "widget-rename-fbv", widget)
+    assert bound.url == reverse("widget-rename-fbv", kwargs={"name": "sprocket"})

@@ -12,7 +12,6 @@ from django.http.response import HttpResponseBase
 from django.shortcuts import render as django_render
 from django.utils.cache import patch_vary_headers
 
-from hypermediator.affordances import Placement
 from hypermediator.htmx import is_htmx, is_partial, is_unsafe, redirect_to_location
 
 VARY = ("HX-Request", "HX-Request-Type")
@@ -32,20 +31,17 @@ def has_invalid_form(context: Mapping[str, Any] | None) -> bool:
     )
 
 
-def resolve_placement(declared: Placement | None, url_kwargs: Mapping[str, Any]) -> Placement:
-    """The declared placement; otherwise ITEM when the URL identifies an object, else PAGE."""
-    if declared is not None:
-        return declared
-    identified = "pk" in url_kwargs or "slug" in url_kwargs
-    return Placement.ITEM if identified else Placement.PAGE
+def handler_redirect(request: HttpRequest, response: HttpResponseBase) -> HttpResponseBase:
+    """A redirect from a view's own handler, for an unsafe htmx request, becomes ``HX-Location``
+    so htmx navigates instead of swapping the target page into the control. An item refresh
+    (``HX-Hm-Item``) follows the redirect, since its target page holds the item."""
+    if is_htmx(request) and is_unsafe(request) and "HX-Hm-Item" not in request.headers:
+        return redirect_to_location(response)
+    return response
 
 
-def finish_response(
-    request: HttpRequest, response: HttpResponseBase, placement: Placement
-) -> HttpResponseBase:
-    """Convert a PAGE-placement redirect to ``HX-Location`` for htmx, and add ``Vary``."""
-    if is_htmx(request) and is_unsafe(request) and placement is Placement.PAGE:
-        response = redirect_to_location(response)
+def finish_response(request: HttpRequest, response: HttpResponseBase) -> HttpResponseBase:
+    """Add ``Vary`` to every response of a hypermediator view."""
     patch_vary_headers(response, VARY)
     return response
 

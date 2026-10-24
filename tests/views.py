@@ -228,3 +228,41 @@ def mutating_get(request: HttpRequest) -> HttpResponse:
     """A GET that wrongly changes state, for the state-safety assertion."""
     Widget.objects.create(name="created by GET")
     return HttpResponse("mutated")
+
+
+def saving_get(request: HttpRequest) -> HttpResponse:
+    """A GET that wrongly re-saves an existing row: an UPDATE, with no new row or pk."""
+    widget = Widget.objects.get()
+    widget.name = "renamed by GET"
+    widget.save()
+    return HttpResponse("saved")
+
+
+class WidgetRenewBySlug(HypermediaMixin, SingleObjectMixin, RenewPost):  # type: ignore[type-arg]
+    """Routed by slug, not pk: the URL kwargs come from the route."""
+
+    model = Widget
+    slug_field = "name"
+    affordance = Affordance("Renew by name")
+
+    def unavailable(self, obj: object | None) -> str | None:
+        return retired_reason(obj) if isinstance(obj, Widget) else None
+
+
+@affordance(label="Rename by name", url_kwargs=lambda widget: {"name": widget.name})
+def widget_rename_fbv(request: HttpRequest, name: str) -> HttpResponse:
+    return HttpResponse("renamed")
+
+
+@affordance(label="Guarded", permission="tests.change_widget")
+def widget_guarded_fbv(request: HttpRequest) -> HttpResponse:
+    return HttpResponse("guarded")
+
+
+class WidgetLoginPost(HypermediaMixin, LoginRequiredMixin, View):
+    """The auth mixin sits inside HypermediaMixin, so its login redirect passes through it."""
+
+    affordance = Affordance("Archive")
+
+    def post(self, request: HttpRequest) -> HttpResponseBase:
+        return redirect("/widgets/")

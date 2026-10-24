@@ -252,3 +252,13 @@ def test_label_and_reason_are_escaped() -> None:
     control = only(html, "widget-odd")
     assert control.label == "<b>\"&'"
     assert control.reason == "<b>\"&'"
+
+
+def test_rendered_controls_are_safe_strings(widget: Widget) -> None:
+    from django.utils.safestring import SafeData
+
+    from hypermediator.templatetags.hypermediator import hm_htmx, render_link
+
+    request = make_request(can_change=True)
+    assert isinstance(render_link(request, bind(request, "widget-renew", widget)), SafeData)
+    assert isinstance(hm_htmx(), SafeData)

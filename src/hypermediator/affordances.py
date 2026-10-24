@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import ClassVar
 from urllib.parse import urlsplit
 
-_IANA_TOKEN = re.compile(r"^[a-z][a-z0-9.\-]*$")
+_IANA_TOKEN = re.compile(r"[a-z][a-z0-9.\-]*")
+_URI_FORBIDDEN = re.compile(r'["\\\s]')
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,9 @@ Placement.PAGE = Placement(target="body", swap="innerHTML", select="body", push_
 
 
 def _is_absolute_uri(token: str) -> bool:
+    """An absolute URI that can sit in a quoted ``Link`` rel and an attribute unchanged."""
+    if _URI_FORBIDDEN.search(token):
+        return False
     _, separator, rest = token.partition(":")
     return bool(urlsplit(token).scheme) and bool(separator) and bool(rest)
 
@@ -43,6 +47,8 @@ class Affordance:
     def __post_init__(self) -> None:
         if not self.label:
             raise ValueError("Affordance label must not be empty")
+        if isinstance(self.rel, str):
+            raise TypeError(f"Affordance rel must be a sequence of tokens, not {self.rel!r}")
         for token in self.rel:
-            if not (_IANA_TOKEN.match(token) or _is_absolute_uri(token)):
+            if not (_IANA_TOKEN.fullmatch(token) or _is_absolute_uri(token)):
                 raise ValueError(f"Invalid rel token: {token!r}")

@@ -7,6 +7,17 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("widget/<int:pk>/renew/", views.WidgetRenew.as_view(), name="widget-renew"),
     path("widget/<int:pk>/renew-fn/", views.widget_renew_fbv, name="widget-renew-fbv"),
     path("mutating/", views.mutating_get, name="mutating-get"),
+    path("saving/", views.saving_get, name="saving-get"),
+    path(
+        "widget/by-name/<slug:slug>/renew/",
+        views.WidgetRenewBySlug.as_view(),
+        name="widget-renew-slug",
+    ),
+    path(
+        "widget/by-name/<slug:name>/rename-fn/", views.widget_rename_fbv, name="widget-rename-fbv"
+    ),
+    path("widgets/guarded-fn/", views.widget_guarded_fbv, name="widget-guarded-fbv"),
+    path("widgets/login-post/", views.WidgetLoginPost.as_view(), name="widget-login-post"),
     path("widgets/", views.WidgetLoginOnly.as_view(), name="widget-list"),
     path("widget/new/", views.WidgetCreate.as_view(), name="widget-create"),
     path("widget/<int:pk>/view/", views.WidgetDetailView.as_view(), name="widget-view"),
