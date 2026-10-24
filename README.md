@@ -149,6 +149,57 @@ Load them with `{% load hypermediator %}` in every template that uses them.
 
 Rels, reasons, placement and triggers come from Python, never from the template.
 
+### Customising control markup
+
+Every control is rendered from a template in `hypermediator/`. Override a template by
+putting one with the same name earlier on the template search path (in a `DIRS` entry, or an
+app listed before `hypermediator`).
+
+**Override points.**
+
+- `hypermediator/reason.html`: the reason shown beside a disabled control. This is the only
+  place the reason element is rendered, and the one to override.
+- `hypermediator/link.html`, `action.html`, `form.html`, `microdata.html` and
+  `unavailable.html`: whole-control templates. Overriding them is at your own risk; the fixed
+  parts below are yours to keep intact.
+
+**Fixed** (the contract the extractor, `hypermediator.testing` and assistive technology rely on):
+
+- the wrapper and its `id` (`hm-{name}` or `hm-{name}-{pk}`);
+- the control id `{id}-c`;
+- the reason id `{id}-reason`, on a non-empty element;
+- `aria-describedby` on the disabled control, pointing at the reason;
+- no `href` or `hx-*` on disabled controls;
+- the microdata as the wrapper's last child.
+
+**Your choice:** the reason element and its class, the text and punctuation around it, spacing.
+
+The default `reason.html` is one line, with no trailing newline:
+
+```html
+ (<small id="{{ bound.dom_id }}-reason" class="hm-reason">{{ bound.reason }}</small>)
+```
+
+The parentheses sit outside the element, so `aria-describedby` and the extractor read only the
+reason. An override that puts the reason on its own line:
+
+```html
+<br><em id="{{ bound.dom_id }}-reason" class="why">Unavailable: {{ bound.reason }}</em>
+```
+
+`hypermediator.testing.violations()` reports an override that drops the id.
+
+**Template context.** These variables are public API for every control template:
+
+- `bound`: the bound affordance, with `bound.dom_id`, `bound.reason`, `bound.url`,
+  `bound.state` (`"enabled"` or `"disabled"`) and `bound.endpoint.name`;
+- `label`: the affordance's label;
+- `rels`: all rel tokens; `html_rel`: those valid on the element, space-joined;
+- `hx`: a dict of htmx attributes, empty when disabled;
+- `itemtype`: the microdata item type;
+- `form` and `rows` (`form.html` only): the form, and `(field, current)` pairs for its
+  visible fields.
+
 ### Testing
 
 ```python
