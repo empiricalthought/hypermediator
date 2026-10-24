@@ -65,6 +65,7 @@ def test_rel_tokens_validated():
     with pytest.raises(ValueError):
         Affordance(label="", rel=())
 
+
 def test_html_rels_filters_per_element():
     assert html_rels(["next", "edit", "https://x.example/r"], "a") == ("next",)
     assert html_rels(["tag", "search"], "form") == ("search",)
