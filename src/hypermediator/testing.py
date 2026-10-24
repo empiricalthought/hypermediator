@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Literal
+from collections.abc import Iterable
+from typing import Literal, cast
 
 from django.apps import apps
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Model
 from django.http import HttpResponse
 from django.http.response import HttpResponseBase
 from django.test import Client
@@ -22,8 +23,10 @@ _FORBIDDEN_HX = frozenset({"hx-put", "hx-patch", "hx-delete"})
 _REQUIRED_VARY = ("HX-Request", "HX-Request-Type")
 
 
-def _page_of(response: HttpResponse) -> Page:
-    return extract(response.content.decode(response.charset))
+def _page_of(response: HttpResponseBase) -> Page:
+    # The test client's responses are typed as HttpResponseBase; they carry content.
+    body = cast(HttpResponse, response)
+    return extract(body.content.decode(body.charset))
 
 
 def _is_managed(control: Control) -> bool:
@@ -105,7 +108,7 @@ def _layer3(page: Page, controls: list[Control]) -> list[str]:
     return found
 
 
-def _layer4(page: Page, controls: list[Control], response: HttpResponse) -> list[str]:
+def _layer4(page: Page, controls: list[Control], response: HttpResponseBase) -> list[str]:
     found: list[str] = []
     for control in controls:
         if control.hx and not control.enabled:
@@ -130,7 +133,7 @@ def _layer4(page: Page, controls: list[Control], response: HttpResponse) -> list
     return found
 
 
-def violations(response: HttpResponse) -> list[str]:
+def violations(response: HttpResponseBase) -> list[str]:
     """One message per failed layer 1 to 4 rule, each starting with its layer tag."""
     page = _page_of(response)
     # hx-* on a plain anchor is still a violation, so L4 sees every control.
@@ -143,7 +146,7 @@ def violations(response: HttpResponse) -> list[str]:
     ]
 
 
-def assert_conforms(response: HttpResponse) -> Page:
+def assert_conforms(response: HttpResponseBase) -> Page:
     """Raise ``AssertionError`` listing every violation, else return the extracted page."""
     found = violations(response)
     if found:
@@ -155,18 +158,25 @@ def _state_of(control: Control) -> str:
     return "enabled" if control.enabled else "disabled"
 
 
-def assert_same_affordances(full: HttpResponse, fragment: HttpResponse) -> None:
+def assert_same_affordances(full: HttpResponseBase, fragment: HttpResponseBase) -> None:
     """The fragment exposes the same (name, state) multiset as the full page's matching region."""
     fragment_page = _page_of(fragment)
     full_page = _page_of(full)
     expected = Counter((c.name, _state_of(c)) for c in fragment_page.controls if _is_managed(c))
     roots = set(fragment_page.root_ids)
-    actual = Counter(
-        (c.name, _state_of(c))
-        for c in full_page.controls
-        if _is_managed(c) and (c.wrapper_id in roots or roots & set(c.ancestor_ids))
-    )
-    if expected != actual:
+    if roots:
+        actual = Counter(
+            (c.name, _state_of(c))
+            for c in full_page.controls
+            if _is_managed(c) and (c.wrapper_id in roots or roots & set(c.ancestor_ids))
+        )
+        matches = expected == actual
+    else:
+        # No root element carries an id, so the fragment's region cannot be located in the full
+        # page: every fragment affordance must then appear there in the same state.
+        actual = Counter((c.name, _state_of(c)) for c in full_page.controls if _is_managed(c))
+        matches = not expected - actual
+    if not matches:
         raise AssertionError(
             f"Fragment affordances {sorted(expected.elements(), key=str)} differ from the "
             f"full page's {sorted(actual.elements(), key=str)} in the same region"
@@ -187,21 +197,27 @@ def assert_allow_matches(client: Client, path: str, url_name: str) -> None:
         )
 
 
-def _snapshot() -> dict[str, tuple[int, object]]:
+def _snapshot(exclude: frozenset[type[Model]]) -> dict[str, tuple[int, object]]:
     snapshot: dict[str, tuple[int, object]] = {}
     for model in apps.get_models():
-        if not model._meta.managed or model._meta.proxy:
+        if model in exclude or not model._meta.managed or model._meta.proxy:
             continue
         totals = model._default_manager.aggregate(count=Count("pk"), top=Max("pk"))
         snapshot[model._meta.label] = (totals["count"], totals["top"])
     return snapshot
 
 
-def assert_get_does_not_change_state(client: Client, path: str) -> HttpResponseBase:
-    """A GET succeeds and leaves every model's row count and highest pk unchanged."""
-    before = _snapshot()
+def assert_get_does_not_change_state(
+    client: Client, path: str, *, exclude: Iterable[type[Model]] = ()
+) -> HttpResponseBase:
+    """A GET succeeds and leaves every model's row count and highest pk unchanged.
+
+    Models in ``exclude`` are not snapshotted, for state a GET legitimately writes, such as
+    the session."""
+    skipped = frozenset(exclude)
+    before = _snapshot(skipped)
     response = client.get(path)
-    after = _snapshot()
+    after = _snapshot(skipped)
     if response.status_code >= 400:
         raise AssertionError(f"GET {path} returned {response.status_code}")
     changed = [

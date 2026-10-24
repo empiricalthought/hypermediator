@@ -145,6 +145,15 @@ def test_same_affordances_detects_state_and_missing_controls() -> None:
         assert_same_affordances(_response(_link("a")), _response(_link("a") + _link("b")))
 
 
+def test_same_affordances_fragment_without_root_ids_must_be_contained_in_full() -> None:
+    full = _response(_link("a") + _disabled("b") + _link("c"))
+    assert_same_affordances(full, _response("<div>" + _link("a") + _disabled("b") + "</div>"))
+    with pytest.raises(AssertionError):
+        assert_same_affordances(full, _response("<div>" + _link("b") + "</div>"))
+    with pytest.raises(AssertionError):
+        assert_same_affordances(full, _response("<div>" + _link("d") + "</div>"))
+
+
 @pytest.mark.django_db
 def test_allow_matches(client: Client) -> None:
     assert_allow_matches(client, "/widgets/next/", "widget-next")
@@ -246,3 +255,10 @@ def test_l3_ignores_application_links_inside_a_managed_form() -> None:
     assert _found(unresolved, "L3") == [
         "L3: control 'hm-g-c' in wrapper 'hm-g' has no microdata item whose control resolves to it"
     ]
+
+
+@pytest.mark.django_db
+def test_get_state_exclude_skips_listed_models(client: Client) -> None:
+    with pytest.raises(AssertionError, match=r"tests\.Widget"):
+        assert_get_does_not_change_state(client, "/mutating/")
+    assert_get_does_not_change_state(client, "/mutating/", exclude=(Widget,))
