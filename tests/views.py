@@ -14,6 +14,7 @@ from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 
 from hypermediator.affordances import Affordance, Placement
+from hypermediator.concurrency import ConcurrencyMixin
 from hypermediator.shortcuts import render
 from hypermediator.views import HypermediaMixin, affordance
 from tests.models import Gadget, Widget
@@ -181,3 +182,11 @@ class WidgetOdd(HypermediaMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return HttpResponse("odd")
+
+
+class WidgetEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
+    model = Widget
+    fields = ("name",)
+    template_name = "concurrency/form.html"
+    success_url = "/widgets/"
+    affordance = Affordance("Edit widget")

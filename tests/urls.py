@@ -29,4 +29,5 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("renew-form/", views.RenewFormView.as_view(), name="renew-form"),
     path("widgets/odd/", views.WidgetOdd.as_view(), name="widget-odd"),
     path("plain/", views.WidgetUndeclared.as_view(), name="widget-plain"),
+    path("widget/<int:pk>/edit-concurrent/", views.WidgetEdit.as_view(), name="widget-edit"),
 ]

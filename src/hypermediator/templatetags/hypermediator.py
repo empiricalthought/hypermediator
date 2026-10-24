@@ -6,11 +6,12 @@ produce the markup."""
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from django import template
 from django.db.models import Model
-from django.forms import BaseForm
+from django.forms import BaseForm, BoundField
 from django.http import HttpRequest
 from django.template.loader import render_to_string
 from django.utils.html import format_html
@@ -147,6 +148,15 @@ def hm_action(
     return _render("hypermediator/action.html", request, bound, "form", hx=_hx(bound, "hx-post"))
 
 
+def _current_value(field: BoundField, current: Mapping[str, Any] | None) -> str | None:
+    """The stored value of ``field`` when it differs from the submitted one, else ``None``."""
+    if not current or not field.form.is_bound or field.name not in current:
+        return None
+    stored = "" if current[field.name] is None else str(current[field.name])
+    submitted = "" if field.value() is None else str(field.value())
+    return stored if stored != submitted else None
+
+
 @register.simple_tag(takes_context=True)
 def hm_form(
     context: template.Context, url_name: str, form: BaseForm, obj: Model | None = None
@@ -155,7 +165,12 @@ def hm_form(
     bound = _bind_and_record(request, url_name, obj)
     if bound is None:
         return ""
-    return _render("hypermediator/form.html", request, bound, "form", form=form, hx=_form_hx(bound))
+    rows = [
+        (field, _current_value(field, context.get("hm_current"))) for field in form.visible_fields()
+    ]
+    return _render(
+        "hypermediator/form.html", request, bound, "form", form=form, rows=rows, hx=_form_hx(bound)
+    )
 
 
 @register.simple_tag
