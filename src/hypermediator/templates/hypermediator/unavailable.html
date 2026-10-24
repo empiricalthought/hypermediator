@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ label }} is unavailable</title>
+</head>
+<body>
+<span class="hm-control" id="{{ dom_id }}"><a id="{{ dom_id }}-c" role="link" aria-disabled="true" aria-describedby="{{ dom_id }}-reason">{{ label }}</a><span id="{{ dom_id }}-reason" class="hm-reason">{{ reason }}</span><span hidden itemscope itemtype="{{ itemtype }}"><meta itemprop="name" content="{{ name }}"><meta itemprop="control" content="{{ dom_id }}-c">{% for rel in rels %}<meta itemprop="rel" content="{{ rel }}">{% endfor %}</span></span>
+{% if back_url %}<p><a href="{{ back_url }}">Back</a></p>{% endif %}
+</body>
+</html>

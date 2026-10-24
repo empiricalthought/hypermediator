@@ -37,6 +37,8 @@ addopts = "-ra --strict-markers"
 line-length = 100
 src = ["src", "tests"]
 
+extend-exclude = ["tests/migrations"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "DJ", "SIM", "RUF"]
 
