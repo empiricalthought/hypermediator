@@ -1,9 +1,15 @@
+import contextlib
 import datetime
 import re
+from collections.abc import Iterator
 from decimal import Decimal
+from typing import Any
+from unittest import mock
 
 import pytest
+from django.db import models, transaction
 from django.db.models import Prefetch
+from django.db.models.signals import pre_save
 from django.test import Client
 from django.utils import timezone
 
@@ -216,3 +222,44 @@ def test_use_it_reason_wins_over_stale_fingerprint(client: Client, widget: Widge
     body = response.content.decode()
     assert "Retired widgets cannot be renewed" in body
     assert "changed by someone else" not in body
+
+
+@pytest.mark.django_db
+def test_check_and_save_share_one_locked_atomic_block(client: Client, widget: Widget) -> None:
+    current = token(client, widget)
+    events: list[tuple[str, int]] = []
+    depth = 0
+    real_atomic = transaction.atomic
+    real_lock = models.QuerySet.select_for_update
+
+    @contextlib.contextmanager
+    def counting_atomic(*args: Any, **kwargs: Any) -> Iterator[None]:
+        nonlocal depth
+        with real_atomic(*args, **kwargs):
+            depth += 1
+            events.append(("enter", depth))
+            try:
+                yield
+            finally:
+                depth -= 1
+
+    def locking(self: Any, *args: Any, **kwargs: Any) -> Any:
+        events.append(("lock", depth))
+        return real_lock(self, *args, **kwargs)
+
+    def saving(**_: Any) -> None:
+        events.append(("save", depth))
+
+    pre_save.connect(saving, sender=Widget)
+    try:
+        with (
+            mock.patch("hypermediator.concurrency.transaction.atomic", counting_atomic),
+            mock.patch.object(models.QuerySet, "select_for_update", locking),
+        ):
+            response = client.post(
+                URL.format(widget.pk), {"name": "Mine", "_hm_fingerprint": current}
+            )
+    finally:
+        pre_save.disconnect(saving, sender=Widget)
+    assert response.status_code == 302
+    assert events == [("enter", 1), ("lock", 1), ("save", 1)]

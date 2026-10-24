@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from django import forms
+from django.db import transaction
 from django.db.models import Model
 from django.forms.models import model_to_dict
 from django.forms.utils import ErrorDict
@@ -48,14 +49,16 @@ class ConcurrencyMixin:
         return self._with_fingerprint(form, fingerprint(self.object, self._fields()))
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        # A fresh fetch, before the form binds: the form's instance is mutated by validation.
-        self.object = self.get_object()  # type: ignore[attr-defined]
-        fields = self._fields()
-        stored = fingerprint(self.object, fields)
-        if request.POST.get(FINGERPRINT_FIELD) == stored:
+        # One transaction holds a row lock from the fresh fetch (made before the form binds,
+        # as validation mutates the form's instance) through the check and the save.
+        with transaction.atomic():
+            self.object = self.get_object(self.get_queryset().select_for_update())  # type: ignore[attr-defined]
+            fields = self._fields()
+            stored = fingerprint(self.object, fields)
+            if request.POST.get(FINGERPRINT_FIELD) != stored:
+                return self._conflict(request, stored, fields)
             response: HttpResponse = super().post(request, *args, **kwargs)  # type: ignore[misc]
             return response
-        return self._conflict(request, stored, fields)
 
     def _fields(self) -> list[str]:
         """The model fields the form exposes, honouring ``fields`` and ``exclude``."""
