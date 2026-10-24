@@ -22,6 +22,7 @@ from hypermediator.microdata import ITEMTYPE
 if TYPE_CHECKING:
     from hypermediator.endpoints import Endpoint
 
+_SAFE_METHODS = frozenset({"get", "head", "options"})
 _V = TypeVar("_V", bound=Callable[..., HttpResponseBase])
 
 
@@ -71,14 +72,14 @@ def _current_endpoint(request: HttpRequest) -> Endpoint:
     from hypermediator.endpoints import endpoint_for
 
     match = request.resolver_match
-    endpoint = endpoint_for(match.url_name) if match and match.url_name else None
+    endpoint = endpoint_for(match.view_name) if match and match.view_name else None
     if endpoint is None:
         raise ImproperlyConfigured("A hypermediator view must be routed under a URL name")
     return endpoint
 
 
 class HypermediaMixin:
-    """Declare an affordance on a class-based view and refuse unavailable POSTs with a 409."""
+    """Declare an affordance on a class-based view and refuse unavailable submits with a 409."""
 
     affordance: Affordance | None = None
     placements: Mapping[str, Placement] = MappingProxyType({})
@@ -87,22 +88,36 @@ class HypermediaMixin:
     def unavailable(self, obj: object | None) -> str | None:
         return None
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        obj = self.get_object() if isinstance(self, SingleObjectMixin) else None
-        reason = self.unavailable(obj)
-        if reason is not None:
-            return unavailable_response(request, _current_endpoint(request), obj, reason)
-        parent = getattr(super(), "post", None)
-        if parent is None:
-            return self.http_method_not_allowed(request, *args, **kwargs)  # type: ignore[attr-defined,no-any-return]
-        return cast(HttpResponseBase, parent(request, *args, **kwargs))
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        # Guard every state-changing handler. Wrapping the handler on the instance leaves
+        # Django's dispatch, Allow and 405 behaviour untouched, and means any auth mixin's
+        # dispatch (see-it) has run before the guard (use-it), whatever the MRO.
+        method = (request.method or "").lower()
+        if method not in _SAFE_METHODS and method in getattr(self, "http_method_names", ()):
+            handler = getattr(self, method, None)
+            if handler is not None:
+                setattr(self, method, self._guarded(handler))
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc,no-any-return]
 
-    def _allowed_methods(self) -> list[str]:
-        # This mixin always defines post(); only advertise POST when the view really handles it.
-        methods: list[str] = super()._allowed_methods()  # type: ignore[misc]
-        if getattr(super(), "post", None) is None:
-            methods.remove("POST")
-        return methods
+    def _guarded(self, handler: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:
+        @functools.wraps(handler)
+        def guarded(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+            obj = self._use_object()
+            reason = self.unavailable(obj)
+            if reason is not None:
+                return unavailable_response(request, _current_endpoint(request), obj, reason)
+            return handler(request, *args, **kwargs)
+
+        return guarded
+
+    def _use_object(self) -> Any:
+        """The object use-it is judged on: loaded only when the URL identifies one."""
+        if not isinstance(self, SingleObjectMixin):
+            return None
+        url_kwargs: Mapping[str, Any] = getattr(self, "kwargs", {})
+        if self.pk_url_kwarg in url_kwargs or self.slug_url_kwarg in url_kwargs:
+            return self.get_object()
+        return None
 
 
 def affordance(

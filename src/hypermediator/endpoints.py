@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from django.core.signals import setting_changed
 from django.db.models import Model
 from django.http import HttpRequest
-from django.urls import NoReverseMatch, resolve, reverse
+from django.urls import NoReverseMatch, URLPattern, URLResolver, get_resolver, reverse
 
 from hypermediator.affordances import Affordance, Placement
-from hypermediator.views import FunctionDeclaration, HypermediaMixin
+from hypermediator.views import FunctionDeclaration
 
 State = Literal["enabled", "disabled", "hidden"]
 
@@ -25,6 +25,10 @@ def dom_id_for(name: str, obj: Model | None = None) -> str:
 
 @dataclass(frozen=True)
 class Endpoint:
+    """``methods`` is the declared set ("GET", plus "POST" when the view handles POST), not
+    derived from Django's handlers; mismatches with Django's Allow are reported by system
+    checks."""
+
     name: str
     affordance: Affordance
     methods: frozenset[str]
@@ -68,20 +72,35 @@ class Bound:
 
 
 def _allowed_methods(view_class: type) -> frozenset[str]:
-    defines_post = any(
-        "post" in vars(klass) for klass in view_class.__mro__ if klass is not HypermediaMixin
-    )
-    return frozenset({"GET", "POST"} if defines_post else {"GET"})
+    return frozenset({"GET", "POST"} if hasattr(view_class, "post") else {"GET"})
+
+
+def _find_callback(url_name: str) -> Callable[..., Any]:
+    """Walk the URLconf for the pattern with this (namespaced) name; no URL kwargs are needed."""
+
+    def walk(
+        patterns: Iterable[URLPattern | URLResolver], prefix: str
+    ) -> Callable[..., Any] | None:
+        for pattern in patterns:
+            if isinstance(pattern, URLResolver):
+                inner = f"{prefix}{pattern.namespace}:" if pattern.namespace else prefix
+                found = walk(pattern.url_patterns, inner)
+                if found is not None:
+                    return found
+            elif pattern.name and f"{prefix}{pattern.name}" == url_name:
+                return pattern.callback
+        return None
+
+    callback = walk(get_resolver().url_patterns, "")
+    if callback is None:
+        raise NoReverseMatch(f"Reverse for '{url_name}' not found.")
+    return callback
 
 
 @functools.cache
 def endpoint_for(url_name: str) -> Endpoint | None:
     """The endpoint behind a URL name, or None when its view declares no affordance."""
-    try:
-        url = reverse(url_name)
-    except NoReverseMatch:
-        url = reverse(url_name, kwargs={"pk": 1})
-    func = resolve(url).func
+    func = _find_callback(url_name)
     declaration: FunctionDeclaration | None = getattr(func, "hypermediator", None)
     if declaration is not None:
         return Endpoint(
