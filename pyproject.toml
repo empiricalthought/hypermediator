@@ -30,15 +30,15 @@ dev = [
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
-pythonpath = ["."]
+pythonpath = [".", "example"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "example"]
 
-extend-exclude = ["tests/migrations"]
+extend-exclude = ["tests/migrations", "example/catalog/migrations"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "DJ", "SIM", "RUF"]
@@ -46,7 +46,8 @@ select = ["E", "F", "I", "UP", "B", "DJ", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 plugins = ["mypy_django_plugin.main"]
-files = ["src", "tests"]
+files = ["src", "tests", "example"]
+mypy_path = "example"
 
 [tool.django-stubs]
 django_settings_module = "tests.settings"

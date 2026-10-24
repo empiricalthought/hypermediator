@@ -1,0 +1,26 @@
+{% extends "base_generic.html" %}
+{% load hypermediator %}
+
+{% block content %}
+{% partialdef content inline %}
+  <div itemscope itemtype="https://schema.org/Person">
+    <h1>Author: <span itemprop="name">{{ author }}</span></h1>
+    <p>{{ author.date_of_birth|default_if_none:"" }} - {{ author.date_of_death|default_if_none:"" }}</p>
+    <p>{% hm_link "author-update" author %} {% hm_link "author-delete" author %}</p>
+
+    <div style="margin-left:20px;margin-top:20px">
+      <h2>Books</h2>
+      {% if author.book_set.all %}
+        <dl>
+          {% for book in author.book_set.all %}
+            <dt><a href="{{ book.get_absolute_url }}">{{ book }}</a> ({{ book.bookinstance_set.all.count }})</dt>
+            <dd>{{ book.summary }}</dd>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p>This author has no books.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endpartialdef %}
+{% endblock %}

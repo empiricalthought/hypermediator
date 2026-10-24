@@ -1,0 +1,21 @@
+{% extends "base_generic.html" %}
+{% load hypermediator %}
+
+{% block content %}
+{% partialdef content inline %}
+  <h1>Author List</h1>
+  {% hm_link "author-create" %}
+  {% if author_list %}
+    <ul>
+      {% for author in author_list %}
+        <li>
+          <a href="{{ author.get_absolute_url }}">{{ author }}</a>
+          ({{ author.date_of_birth|default_if_none:"" }} - {{ author.date_of_death|default_if_none:"" }})
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>There are no authors available.</p>
+  {% endif %}
+{% endpartialdef %}
+{% endblock %}

@@ -31,4 +31,6 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("widget/<int:pk>/edit-concurrent/", views.WidgetEdit.as_view(), name="widget-edit"),
     path("widget/<int:pk>/edit-all/", views.WidgetEditAll.as_view(), name="widget-edit-all"),
     path("thing/<int:pk>/edit/", views.ThingEdit.as_view(), name="thing-edit"),
+    path("catalog/", include("catalog.urls")),
+    path("accounts/", include("django.contrib.auth.urls")),
 ]

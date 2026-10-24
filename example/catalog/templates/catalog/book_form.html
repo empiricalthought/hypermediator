@@ -1,0 +1,14 @@
+{% extends "base_generic.html" %}
+{% load hypermediator %}
+
+{% block content %}
+{% partialdef content inline %}
+  {% if object %}
+    <h1>Update book: {{ object }}</h1>
+    {% hm_form "book-update" form object %}
+  {% else %}
+    <h1>Create book</h1>
+    {% hm_form "book-create" form %}
+  {% endif %}
+{% endpartialdef %}
+{% endblock %}
