@@ -6,6 +6,7 @@ from types import MappingProxyType
 from django import forms
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.forms import modelform_factory
 from django.http import HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import redirect
@@ -17,7 +18,7 @@ from hypermediator.affordances import Affordance, Placement
 from hypermediator.concurrency import ConcurrencyMixin
 from hypermediator.shortcuts import render
 from hypermediator.views import HypermediaMixin, affordance
-from tests.models import Gadget, Widget
+from tests.models import Gadget, Thing, Widget
 
 
 def retired_reason(widget: Widget | None) -> str | None:
@@ -190,3 +191,24 @@ class WidgetEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore
     template_name = "concurrency/form.html"
     success_url = "/widgets/"
     affordance = Affordance("Edit widget")
+
+    def unavailable(self, obj: object | None) -> str | None:
+        return retired_reason(obj) if isinstance(obj, Widget) else None
+
+
+class WidgetEditAll(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
+    """A ``__all__``-style form that excludes ``status``."""
+
+    model = Widget
+    form_class = modelform_factory(Widget, exclude=["status"])
+    template_name = "concurrency/form.html"
+    success_url = "/widgets/"
+    affordance = Affordance("Edit widget fully")
+
+
+class ThingEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
+    model = Thing
+    fields = ("when", "stamp", "price", "owner", "tags", "note")
+    template_name = "concurrency/thing_form.html"
+    success_url = "/widgets/"
+    affordance = Affordance("Edit thing")

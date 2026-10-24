@@ -21,3 +21,19 @@ class Gadget(models.Model):
 
     def __str__(self) -> str:
         return str(self.id)
+
+
+class Thing(models.Model):
+    """Every value type whose fingerprint must be stable across a render and a round-trip."""
+
+    when = models.DateField()
+    stamp = models.DateTimeField()
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    owner = models.ForeignKey(
+        Widget, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    tags = models.ManyToManyField(Widget, blank=True, related_name="+")
+    note = models.CharField(max_length=20, null=True, blank=True)  # noqa: DJ001
+
+    def __str__(self) -> str:
+        return f"Thing {self.pk}"

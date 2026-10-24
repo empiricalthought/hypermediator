@@ -18,9 +18,23 @@ from django.http import HttpRequest, HttpResponse
 FINGERPRINT_FIELD = "_hm_fingerprint"
 
 
+def stored_values(instance: Model, fields: Iterable[str]) -> dict[str, Any]:
+    """The form-prepared values of ``fields``: a many-to-many as the sorted list of related pks,
+    so neither related objects' text nor their query order can change the result."""
+    values = model_to_dict(instance, list(fields))
+    return {
+        name: sorted((o.pk for o in value), key=str)
+        if isinstance(value, list)
+        else value.pk
+        if isinstance(value, Model)
+        else value
+        for name, value in values.items()
+    }
+
+
 def fingerprint(instance: Model, fields: Iterable[str]) -> str:
     """A SHA-256 hex digest of ``instance``'s values for ``fields``."""
-    values = model_to_dict(instance, list(fields))
+    values = stored_values(instance, fields)
     return hashlib.sha256(json.dumps(values, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -44,12 +58,10 @@ class ConcurrencyMixin:
         return self._conflict(request, stored, fields)
 
     def _fields(self) -> list[str]:
-        """The model fields the form exposes; every editable one when the form says ``__all__``."""
-        form_class = self.get_form_class()  # type: ignore[attr-defined]
-        declared = form_class._meta.fields
-        if declared is None:
-            declared = [f.name for f in self.object._meta.get_fields() if f.editable]
-        return [name for name in declared if name != FINGERPRINT_FIELD]
+        """The model fields the form exposes, honouring ``fields`` and ``exclude``."""
+        model_fields = {f.name for f in self.object._meta.get_fields() if f.editable}
+        base_fields = self.get_form_class().base_fields  # type: ignore[attr-defined]
+        return [n for n in base_fields if n in model_fields and n != FINGERPRINT_FIELD]
 
     @staticmethod
     def _with_fingerprint(form: forms.BaseForm, value: str) -> forms.BaseForm:
@@ -59,7 +71,7 @@ class ConcurrencyMixin:
         return form
 
     def _conflict(self, request: HttpRequest, stored: str, fields: list[str]) -> HttpResponse:
-        current = model_to_dict(self.object, fields)
+        current = stored_values(self.object, fields)
         data = request.POST.copy()
         data[FINGERPRINT_FIELD] = stored
         kwargs = self.get_form_kwargs()  # type: ignore[attr-defined]

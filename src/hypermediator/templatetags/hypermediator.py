@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from django import template
 from django.db.models import Model
-from django.forms import BaseForm, BoundField
+from django.forms import BaseForm, BoundField, ChoiceField, ModelChoiceField
+from django.forms.models import ModelMultipleChoiceField
 from django.http import HttpRequest
 from django.template.loader import render_to_string
 from django.utils.html import format_html
@@ -148,13 +149,30 @@ def hm_action(
     return _render("hypermediator/action.html", request, bound, "form", hx=_hx(bound, "hx-post"))
 
 
+def _readable(field: BoundField, stored: Any) -> str:
+    """``stored`` as the user would read it: related objects' text and choice labels."""
+    form_field = field.field
+    if isinstance(form_field, ModelChoiceField | ModelMultipleChoiceField):
+        pks = stored if isinstance(stored, list) else [] if stored is None else [stored]
+        queryset = form_field.queryset
+        objects = [] if queryset is None else queryset.filter(pk__in=pks)
+        return ", ".join(str(o) for o in objects)
+    if isinstance(form_field, ChoiceField):
+        labels = {str(value): str(label) for value, label in cast(Any, form_field.choices)}
+        values = stored if isinstance(stored, list) else [stored]
+        return ", ".join(labels.get(str(v), str(v)) for v in values if v is not None)
+    prepared = form_field.prepare_value(stored)
+    return "" if prepared is None else str(prepared)
+
+
 def _current_value(field: BoundField, current: Mapping[str, Any] | None) -> str | None:
-    """The stored value of ``field`` when it differs from the submitted one, else ``None``."""
+    """The stored value of ``field``, readable, when it differs from the submitted one."""
     if not current or not field.form.is_bound or field.name not in current:
         return None
-    stored = "" if current[field.name] is None else str(current[field.name])
-    submitted = "" if field.value() is None else str(field.value())
-    return stored if stored != submitted else None
+    stored = current[field.name]
+    if not field.field.has_changed(stored, field.data):
+        return None
+    return _readable(field, stored)
 
 
 @register.simple_tag(takes_context=True)

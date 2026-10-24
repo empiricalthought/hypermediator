@@ -30,4 +30,6 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("widgets/odd/", views.WidgetOdd.as_view(), name="widget-odd"),
     path("plain/", views.WidgetUndeclared.as_view(), name="widget-plain"),
     path("widget/<int:pk>/edit-concurrent/", views.WidgetEdit.as_view(), name="widget-edit"),
+    path("widget/<int:pk>/edit-all/", views.WidgetEditAll.as_view(), name="widget-edit-all"),
+    path("thing/<int:pk>/edit/", views.ThingEdit.as_view(), name="thing-edit"),
 ]
