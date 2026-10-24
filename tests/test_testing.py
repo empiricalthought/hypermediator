@@ -1,6 +1,6 @@
 import pytest
 from django.http import HttpResponse
-from django.test import Client
+from django.test import Client, override_settings
 
 from hypermediator.testing import (
     assert_allow_matches,
@@ -148,7 +148,10 @@ def test_same_affordances_detects_state_and_missing_controls() -> None:
 @pytest.mark.django_db
 def test_allow_matches(client: Client) -> None:
     assert_allow_matches(client, "/widgets/next/", "widget-next")
-    with pytest.raises(AssertionError, match="PUT"):  # FormView also allows PUT (R5)
+    with (
+        override_settings(ROOT_URLCONF="tests.urls_methods"),
+        pytest.raises(AssertionError, match="PUT"),  # FormView also allows PUT (R5)
+    ):
         assert_allow_matches(client, "/pipeline/cbv/", "pipeline-cbv")
     with pytest.raises(AssertionError, match="Allow"):
         assert_allow_matches(client, "/widget/1/renew/", "widget-renew")

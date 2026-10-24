@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -75,26 +75,28 @@ def _allowed_methods(view_class: type) -> frozenset[str]:
     return frozenset({"GET", "POST"} if hasattr(view_class, "post") else {"GET"})
 
 
-def _find_callback(url_name: str) -> Callable[..., Any]:
-    """Walk the URLconf for the pattern with this (namespaced) name; no URL kwargs are needed."""
+def url_routes() -> Iterator[tuple[str | None, URLPattern]]:
+    """Every route in the URLconf with its namespaced name (None when the route is unnamed)."""
 
     def walk(
         patterns: Iterable[URLPattern | URLResolver], prefix: str
-    ) -> Callable[..., Any] | None:
+    ) -> Iterator[tuple[str | None, URLPattern]]:
         for pattern in patterns:
             if isinstance(pattern, URLResolver):
                 inner = f"{prefix}{pattern.namespace}:" if pattern.namespace else prefix
-                found = walk(pattern.url_patterns, inner)
-                if found is not None:
-                    return found
-            elif pattern.name and f"{prefix}{pattern.name}" == url_name:
-                return pattern.callback
-        return None
+                yield from walk(pattern.url_patterns, inner)
+            else:
+                yield (f"{prefix}{pattern.name}" if pattern.name else None), pattern
 
-    callback = walk(get_resolver().url_patterns, "")
-    if callback is None:
-        raise NoReverseMatch(f"Reverse for '{url_name}' not found.")
-    return callback
+    return walk(get_resolver().url_patterns, "")
+
+
+def _find_callback(url_name: str) -> Callable[..., Any]:
+    """The callback of the route with this (namespaced) name; no URL kwargs are needed."""
+    for name, pattern in url_routes():
+        if name == url_name:
+            return pattern.callback
+    raise NoReverseMatch(f"Reverse for '{url_name}' not found.")
 
 
 @functools.cache

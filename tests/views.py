@@ -69,6 +69,7 @@ def widget_renew_fbv(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 class WidgetCreate(HypermediaMixin, CreateView):  # type: ignore[type-arg]
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
     model = Widget
     fields = ("name",)
     affordance = Affordance("New widget")
@@ -125,6 +126,10 @@ class PipelineCbv(HypermediaMixin, FormView):  # type: ignore[type-arg]
     affordance = Affordance("Pipeline")
 
 
+class PipelineCbvStrict(PipelineCbv):
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
+
+
 class PlainFormView(FormView):  # type: ignore[type-arg]
     form_class = PipelineForm
     template_name = "pipeline/form.html"
@@ -166,6 +171,7 @@ class RenewForm(forms.Form):
 
 
 class RenewFormView(HypermediaMixin, FormView):  # type: ignore[type-arg]
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
     form_class = RenewForm
     template_name = "tags/renew.html"
     success_url = "/widgets/"
@@ -186,6 +192,7 @@ class WidgetOdd(HypermediaMixin, View):
 
 
 class WidgetEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
     model = Widget
     fields = ("name",)
     template_name = "concurrency/form.html"
@@ -199,6 +206,8 @@ class WidgetEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore
 class WidgetEditAll(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
     """A ``__all__``-style form that excludes ``status``."""
 
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
+
     model = Widget
     form_class = modelform_factory(Widget, exclude=["status"])
     template_name = "concurrency/form.html"
@@ -207,6 +216,7 @@ class WidgetEditAll(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ign
 
 
 class ThingEdit(ConcurrencyMixin, HypermediaMixin, UpdateView):  # type: ignore[type-arg]
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
     model = Thing
     fields = ("when", "stamp", "price", "owner", "tags", "note")
     template_name = "concurrency/thing_form.html"

@@ -229,6 +229,7 @@ def test_create_view_unavailable_judged_on_none() -> None:
     assert not Widget.objects.filter(name="later").exists()
 
 
+@override_settings(ROOT_URLCONF="tests.urls_methods")
 def test_delete_to_unavailable_is_409_and_row_survives() -> None:
     retired = Widget.objects.create(name="r", status="retired")
     response = Client().delete(reverse("widget-delete", args=[retired.pk]))
@@ -239,6 +240,7 @@ def test_delete_to_unavailable_is_409_and_row_survives() -> None:
     assert not Widget.objects.filter(pk=ok.pk).exists()
 
 
+@override_settings(ROOT_URLCONF="tests.urls_methods")
 def test_put_to_unavailable_update_is_409() -> None:
     retired = Widget.objects.create(name="r", status="retired")
     response = Client().put(
