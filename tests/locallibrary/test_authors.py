@@ -66,7 +66,8 @@ def test_author_delete_post_409(
     client.force_login(librarian)
     response = client.post(reverse("author-delete", kwargs={"pk": author_with_books.pk}))
     assert response.status_code == 409
-    assert "Authors with books cannot be deleted." in response.content.decode()
+    [delete] = assert_conforms(response).by_name("author-delete")
+    assert delete.reason == "Authors with books cannot be deleted."
     assert Author.objects.filter(pk=author_with_books.pk).exists()
 
 

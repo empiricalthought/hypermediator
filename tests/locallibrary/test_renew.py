@@ -58,7 +58,7 @@ def test_renew_post_available_copy_409(
     client.force_login(librarian)
     response = client.post(_renew_url(available_copy), {"renewal_date": _in_days(7)})
     assert response.status_code == 409
-    [renew] = extract(response.content.decode()).by_name("renew-book-librarian")
+    [renew] = assert_conforms(response).by_name("renew-book-librarian")
     assert renew.reason == "Only copies on loan can be renewed."
     available_copy.refresh_from_db()
     assert available_copy.due_back is None
