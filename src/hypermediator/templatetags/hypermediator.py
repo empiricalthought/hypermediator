@@ -53,6 +53,16 @@ def _page_override(request: HttpRequest, attr: str, url_name: str) -> Any:
     return None if declaration is None else getattr(declaration, attr).get(url_name)
 
 
+def _placement_override(request: HttpRequest, url_name: str) -> Placement | None:
+    override: Placement | None = _page_override(request, "placements", url_name)
+    return override
+
+
+def _link_header_override(request: HttpRequest, url_name: str) -> bool | None:
+    override: bool | None = _page_override(request, "link_headers", url_name)
+    return override
+
+
 def _hx(bound: Bound, verb: Literal["hx-get", "hx-post"]) -> dict[str, str]:
     """The htmx attributes of an enabled control; a disabled one has none."""
     if bound.state != "enabled":
@@ -110,8 +120,8 @@ def _bind_and_record(request: HttpRequest, url_name: str, obj: Model | None) -> 
         request,
         url_name,
         obj,
-        placement_override=_page_override(request, "placements", url_name),
-        link_header_override=_page_override(request, "link_headers", url_name),
+        placement_override=_placement_override(request, url_name),
+        link_header_override=_link_header_override(request, url_name),
     )
     if bound.state == "hidden":
         return None

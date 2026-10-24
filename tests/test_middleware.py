@@ -85,17 +85,22 @@ def test_selected_affordance_is_in_link_header() -> None:
     assert response.headers["Link"] == '</widgets/quiet/>; rel="help"'
 
 
+PARTIAL = {"HX-Request": "true", "HX-Request-Type": "partial"}
+
+
+@pytest.mark.parametrize("headers", [None, PARTIAL], ids=["full", "partial"])
 @pytest.mark.parametrize("path", ["/widgets/page/", "/widgets/page-fn/"])
-def test_page_override_turns_selection_off(path: str) -> None:
+def test_page_override_turns_selection_off(path: str, headers: dict[str, str] | None) -> None:
     widget = Widget.objects.create(name="w")
     source = "{% hm_link 'widget-renew' w %}"
     assert "Link" in run(source, can_change=True, w=widget).headers
-    assert "Link" not in run(source, can_change=True, w=widget, path=path).headers
+    assert "Link" not in run(source, can_change=True, w=widget, path=path, headers=headers).headers
 
 
+@pytest.mark.parametrize("headers", [None, PARTIAL], ids=["full", "partial"])
 @pytest.mark.parametrize("path", ["/widgets/page/", "/widgets/page-fn/"])
-def test_page_override_turns_selection_on(path: str) -> None:
-    response = run("{% hm_link 'widget-quiet' %}", path=path)
+def test_page_override_turns_selection_on(path: str, headers: dict[str, str] | None) -> None:
+    response = run("{% hm_link 'widget-quiet' %}", path=path, headers=headers)
     assert response.headers["Link"] == '</widgets/quiet/>; rel="help"'
 
 

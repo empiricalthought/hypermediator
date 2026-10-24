@@ -128,14 +128,32 @@ def test_link_header_on_book_detail(
     assert reverse("book-delete", kwargs={"pk": book.pk}) not in link
 
 
+def test_disabled_renew_is_not_in_book_detail_link_header(
+    client: Client, librarian: User, book: Book, available_copy: BookInstance
+) -> None:
+    client.force_login(librarian)
+    response = client.get(book.get_absolute_url())
+    renew = reverse("renew-book-librarian", kwargs={"pk": available_copy.pk})
+    assert "aria-disabled" in response.content.decode()
+    assert renew not in response.headers.get("Link", "")
+
+
+PARTIAL = {"HX-Request": "true", "HX-Request-Type": "partial"}
+
+
+@pytest.mark.parametrize("headers", [{}, PARTIAL], ids=["full", "partial"])
 @pytest.mark.parametrize("url_name", ["all-borrowed", "my-borrowed"])
 def test_borrowed_lists_override_renew_out_of_link_header(
-    client: Client, librarian: User, on_loan_copy: BookInstance, url_name: str
+    client: Client,
+    librarian: User,
+    on_loan_copy: BookInstance,
+    url_name: str,
+    headers: dict[str, str],
 ) -> None:
     on_loan_copy.borrower = librarian
     on_loan_copy.save()
     client.force_login(librarian)
-    response = client.get(reverse(url_name))
+    response = client.get(reverse(url_name), headers=headers)
     assert (
         reverse("renew-book-librarian", kwargs={"pk": on_loan_copy.pk}) in response.content.decode()
     )
