@@ -228,3 +228,21 @@ def test_get_returns_response_and_rejects_error_status(client: Client) -> None:
     assert assert_get_does_not_change_state(client, "/widget/1/").status_code == 200
     with pytest.raises(AssertionError, match="404"):
         assert_get_does_not_change_state(client, "/no-such-path/")
+
+
+def test_l3_ignores_application_links_inside_a_managed_form() -> None:
+    form = (
+        '<div class="hm-control" id="hm-f"><form id="hm-f-c" action="/f/" method="post">'
+        '<label for="i">ISBN</label><input id="i" name="isbn">'
+        '<div class="helptext"><a href="https://example.com/isbn">ISBN number</a></div>'
+        '<button type="submit">Save</button></form>' + _meta("f", "hm-f-c") + "</div>"
+    )
+    assert _found(form, "L3") == []
+    unresolved = (
+        '<div class="hm-control" id="hm-g"><form id="hm-g-c" action="/g/" method="post">'
+        '<a href="https://example.com/isbn">ISBN number</a>'
+        '<button type="submit">Save</button></form></div>'
+    )
+    assert _found(unresolved, "L3") == [
+        "L3: control 'hm-g-c' in wrapper 'hm-g' has no microdata item whose control resolves to it"
+    ]

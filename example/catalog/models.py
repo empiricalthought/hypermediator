@@ -12,6 +12,8 @@ from django.urls import reverse
 class Genre(models.Model):
     """Model representing a book genre."""
 
+    # No get_absolute_url: MDN's points at genre-detail, a challenge route this example omits.
+
     name = models.CharField(
         max_length=200,
         unique=True,
@@ -66,11 +68,8 @@ class Book(models.Model):
         "ISBN",
         max_length=13,
         unique=True,
-        # MDN's help text links "ISBN number"; a link inside a hypermediator form would be an
-        # unmanaged control in the affordance's wrapper, so the reference is plain text here.
-        help_text=(
-            "13 Character ISBN number (see https://www.isbn-international.org/content/what-isbn)"
-        ),
+        help_text='13 Character <a href="https://www.isbn-international.org/content/what-isbn'
+        '">ISBN number</a>',
     )
     # ManyToManyField used because genre can contain many books. Books can cover many genres.
     genre = models.ManyToManyField(Genre, help_text="Select a genre for this book")
@@ -129,8 +128,7 @@ class BookInstance(models.Model):
 
     def __str__(self) -> str:
         """String for representing the Model object."""
-        title = self.book.title if self.book else ""
-        return f"{self.id} ({title})"
+        return f"{self.id} ({self.book.title})"  # type: ignore[union-attr]  # MDN form
 
     def get_absolute_url(self) -> str:
         """The copy's book page: the tutorial names a bookinstance-detail route it never adds."""

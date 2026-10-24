@@ -82,7 +82,10 @@ def _layer3(page: Page, controls: list[Control]) -> list[str]:
             for token in control.element_rel
             if token not in valid
         )
-        if control.name is None and control.wrapper_id is not None:
+        # Only the wrapper's own control needs the microdata; application links inside a
+        # managed form (a help_text link, say) are not affordances.
+        own = control.wrapper_id is not None and control.id == f"{control.wrapper_id}-c"
+        if control.name is None and own:
             found.append(
                 f"L3: control '{_ref(control)}' in wrapper '{control.wrapper_id}' has no "
                 "microdata item whose control resolves to it"

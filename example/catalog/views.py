@@ -20,9 +20,6 @@ from hypermediator.views import HypermediaMixin, affordance
 from .forms import RenewBookForm
 from .models import Author, Book, BookInstance
 
-# The edit views handle PUT (and DELETE) too; their affordances declare only GET and POST.
-FORM_METHODS = ["get", "post", "head", "options"]
-
 
 def index(request: HttpRequest) -> HttpResponse:
     """View function for home page of site."""
@@ -172,7 +169,8 @@ class AuthorCreate(HypermediaMixin, PermissionRequiredMixin, CreateView):  # typ
     initial = {"date_of_death": "11/11/2023"}  # noqa: RUF012
     permission_required = "catalog.add_author"
     affordance = Affordance(label="Create author", rel=("create-form",), placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
 
 class AuthorUpdate(
@@ -186,7 +184,8 @@ class AuthorUpdate(
     fields = "__all__"
     permission_required = "catalog.change_author"
     affordance = Affordance(label="Update author", rel=("edit",), placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
 
 class AuthorDelete(HypermediaMixin, PermissionRequiredMixin, DeleteView):  # type: ignore[type-arg]
@@ -194,7 +193,8 @@ class AuthorDelete(HypermediaMixin, PermissionRequiredMixin, DeleteView):  # typ
     success_url = reverse_lazy("authors")
     permission_required = "catalog.delete_author"
     affordance = Affordance(label="Delete author", placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
     def unavailable(self, obj: object | None) -> str | None:
         if isinstance(obj, Author) and obj.book_set.exists():
@@ -207,7 +207,8 @@ class BookCreate(HypermediaMixin, PermissionRequiredMixin, CreateView):  # type:
     fields = ["title", "author", "summary", "isbn", "genre", "language"]  # noqa: RUF012
     permission_required = "catalog.add_book"
     affordance = Affordance(label="Create book", rel=("create-form",), placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
 
 class BookUpdate(
@@ -220,7 +221,8 @@ class BookUpdate(
     fields = ["title", "author", "summary", "isbn", "genre", "language"]  # noqa: RUF012
     permission_required = "catalog.change_book"
     affordance = Affordance(label="Update book", rel=("edit",), placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
 
 class BookDelete(HypermediaMixin, PermissionRequiredMixin, DeleteView):  # type: ignore[type-arg]
@@ -228,7 +230,8 @@ class BookDelete(HypermediaMixin, PermissionRequiredMixin, DeleteView):  # type:
     success_url = reverse_lazy("books")
     permission_required = "catalog.delete_book"
     affordance = Affordance(label="Delete book", placement=Placement.PAGE)
-    http_method_names = FORM_METHODS
+    # Django also handles PUT (and DELETE); the affordance declares only GET and POST.
+    http_method_names = ["get", "post", "head", "options"]  # noqa: RUF012
 
     def unavailable(self, obj: object | None) -> str | None:
         if isinstance(obj, Book) and obj.bookinstance_set.exists():

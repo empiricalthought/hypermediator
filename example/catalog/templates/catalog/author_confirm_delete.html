@@ -6,7 +6,7 @@
   <h1>Delete Author: {{ author }}</h1>
 
   {% if author.book_set.all %}
-    <p>These books must be deleted first:</p>
+    <p>You can't delete this author until all their books have been deleted:</p>
     <ul>
       {% for book in author.book_set.all %}
         <li><a href="{{ book.get_absolute_url }}">{{ book }}</a> ({{ book.bookinstance_set.all.count }})</li>
