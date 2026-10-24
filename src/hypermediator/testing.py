@@ -8,6 +8,7 @@ from typing import Literal
 from django.apps import apps
 from django.db.models import Count, Max
 from django.http import HttpResponse
+from django.http.response import HttpResponseBase
 from django.test import Client
 
 from hypermediator.endpoints import endpoint_for
@@ -15,7 +16,9 @@ from hypermediator.extract import Control, Page, extract
 from hypermediator.rels import html_rels
 
 _IMPLICIT_METHODS = frozenset({"HEAD", "OPTIONS"})
-_HX_TAGS_CHECKED_AS_CONTROLS = frozenset({"a", "form", "button"})
+_HX_TAGS_CHECKED_AS_CONTROLS = frozenset({"a", "form"})
+_FORM_PARTS = frozenset({"button", "input", "select", "textarea"})
+_FORBIDDEN_HX = frozenset({"hx-put", "hx-patch", "hx-delete"})
 _REQUIRED_VARY = ("HX-Request", "HX-Request-Type")
 
 
@@ -28,12 +31,12 @@ def _is_managed(control: Control) -> bool:
 
 
 def _is_anchor_target(control: Control) -> bool:
-    """A plain ``<a id>`` target: not a control, so no rule applies to it."""
+    """A plain ``<a id>`` target: no href and neither disabled-link marker, so not a control."""
     return (
         control.kind == "link"
         and control.href is None
-        and control.name is None
-        and control.wrapper_id is None
+        and control.attrs.get("aria-disabled") != "true"
+        and control.attrs.get("role") != "link"
     )
 
 
@@ -44,8 +47,10 @@ def _ref(control: Control) -> str:
 def _layer1(controls: list[Control]) -> list[str]:
     found: list[str] = []
     for control in controls:
-        if control.enabled and not control.href:
-            found.append(f"L1: enabled control '{_ref(control)}' has no href or action")
+        if control.kind == "form" and not control.href:
+            found.append(f"L1: form '{_ref(control)}' has no action")
+        elif control.enabled and not control.href:
+            found.append(f"L1: enabled control '{_ref(control)}' has no href")
         if control.kind == "form" and control.method not in ("GET", "POST"):
             found.append(f"L1: form '{_ref(control)}' uses method '{control.method}'")
     return found
@@ -67,7 +72,7 @@ def _layer2(page: Page, controls: list[Control]) -> list[str]:
     return found
 
 
-def _layer3(controls: list[Control]) -> list[str]:
+def _layer3(page: Page, controls: list[Control]) -> list[str]:
     found: list[str] = []
     for control in controls:
         element: Literal["a", "form"] = "a" if control.kind == "link" else "form"
@@ -82,8 +87,18 @@ def _layer3(controls: list[Control]) -> list[str]:
                 f"L3: control '{_ref(control)}' in wrapper '{control.wrapper_id}' has no "
                 "microdata item whose control resolves to it"
             )
-        if control.name == "":
-            found.append(f"L3: microdata item for control '{_ref(control)}' has no name")
+    for item in page.microdata:
+        where = f"wrapper '{item.wrapper_id}'" if item.wrapper_id else "page"
+        if not any(item.props.get("name", ())):
+            found.append(f"L3: microdata item in {where} has no name")
+        targets = item.props.get("control", ())
+        if not targets:
+            found.append(f"L3: microdata item in {where} has no control")
+        found.extend(
+            f"L3: microdata control '{t}' in {where} is not an id on the page"
+            for t in targets
+            if t not in page.ids
+        )
     return found
 
 
@@ -93,9 +108,14 @@ def _layer4(page: Page, controls: list[Control], response: HttpResponse) -> list
         if control.hx and not control.enabled:
             attrs = ", ".join(sorted(control.hx))
             found.append(f"L4: control '{_ref(control)}' carries {attrs} but has no href or action")
-    for tag, hx_attrs, contains_native in page.hx_elements:
-        if tag not in _HX_TAGS_CHECKED_AS_CONTROLS and not contains_native:
-            names = ", ".join(sorted(hx_attrs))
+    for tag, hx_attrs, contains_native, in_form in page.hx_elements:
+        names = ", ".join(sorted(hx_attrs))
+        for verb in sorted(_FORBIDDEN_HX & set(hx_attrs)):
+            found.append(f"L4: <{tag}> carries {verb}; only GET and POST are allowed")
+        if tag in _FORM_PARTS:
+            if not in_form:
+                found.append(f"L4: <{tag}> carries {names} outside a form with an action")
+        elif tag not in _HX_TAGS_CHECKED_AS_CONTROLS and not contains_native:
             found.append(f"L4: <{tag}> carries {names} without a native control")
     if any(_is_managed(c) for c in controls):
         vary = {v.strip().lower() for v in response.headers.get("Vary", "").split(",")}
@@ -115,7 +135,7 @@ def violations(response: HttpResponse) -> list[str]:
     return [
         *_layer1(real),
         *_layer2(page, real),
-        *_layer3(real),
+        *_layer3(page, real),
         *_layer4(page, list(page.controls), response),
     ]
 
@@ -137,10 +157,11 @@ def assert_same_affordances(full: HttpResponse, fragment: HttpResponse) -> None:
     fragment_page = _page_of(fragment)
     full_page = _page_of(full)
     expected = Counter((c.name, _state_of(c)) for c in fragment_page.controls if _is_managed(c))
+    roots = set(fragment_page.root_ids)
     actual = Counter(
         (c.name, _state_of(c))
         for c in full_page.controls
-        if _is_managed(c) and c.wrapper_id in fragment_page.ids
+        if _is_managed(c) and (c.wrapper_id in roots or roots & set(c.ancestor_ids))
     )
     if expected != actual:
         raise AssertionError(
@@ -166,16 +187,20 @@ def assert_allow_matches(client: Client, path: str, url_name: str) -> None:
 def _snapshot() -> dict[str, tuple[int, object]]:
     snapshot: dict[str, tuple[int, object]] = {}
     for model in apps.get_models():
+        if not model._meta.managed or model._meta.proxy:
+            continue
         totals = model._default_manager.aggregate(count=Count("pk"), top=Max("pk"))
         snapshot[model._meta.label] = (totals["count"], totals["top"])
     return snapshot
 
 
-def assert_get_does_not_change_state(client: Client, path: str) -> None:
-    """A GET leaves every model's row count and highest pk unchanged."""
+def assert_get_does_not_change_state(client: Client, path: str) -> HttpResponseBase:
+    """A GET succeeds and leaves every model's row count and highest pk unchanged."""
     before = _snapshot()
-    client.get(path)
+    response = client.get(path)
     after = _snapshot()
+    if response.status_code >= 400:
+        raise AssertionError(f"GET {path} returned {response.status_code}")
     changed = [
         f"{label}: {before[label]} -> {after[label]}"
         for label in before
@@ -183,3 +208,4 @@ def assert_get_does_not_change_state(client: Client, path: str) -> None:
     ]
     if changed:
         raise AssertionError(f"GET {path} changed state:\n" + "\n".join(changed))
+    return response

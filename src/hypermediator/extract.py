@@ -58,6 +58,17 @@ class Control:
     fields: tuple[Field, ...]
     hx: Mapping[str, str]
     wrapper_id: str | None
+    attrs: Mapping[str, str]
+    ancestor_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class MicrodataItem:
+    """A hypermediator itemscope, whether or not its ``control`` resolves to an element."""
+
+    itemtype: str
+    props: Mapping[str, tuple[str, ...]]
+    wrapper_id: str | None
 
 
 @dataclass(frozen=True)
@@ -65,7 +76,9 @@ class Page:
     controls: tuple[Control, ...]
     ids: Counter[str]
     text_by_id: Mapping[str, str]
-    hx_elements: tuple[tuple[str, Mapping[str, str], bool], ...]
+    hx_elements: tuple[tuple[str, Mapping[str, str], bool, bool], ...]
+    microdata: tuple[MicrodataItem, ...] = ()
+    root_ids: tuple[str, ...] = ()
 
     def by_name(self, name: str) -> list[Control]:
         return [c for c in self.controls if c.name == name]
@@ -264,7 +277,33 @@ class _Extractor:
             fields=fields,
             hx=hx,
             wrapper_id=wrapper.attrs.get("id") if wrapper else None,
+            attrs=dict(node.attrs),
+            ancestor_ids=tuple(a.attrs["id"] for a in node.ancestors() if "id" in a.attrs),
         )
+
+    def microdata_items(self) -> tuple[MicrodataItem, ...]:
+        items: list[MicrodataItem] = []
+        for node in self.nodes:
+            if "itemscope" not in node.attrs or node.attrs.get("itemtype") != ITEMTYPE:
+                continue
+            props: dict[str, list[str]] = {}
+            for meta in node.walk():
+                if meta.tag == "meta" and "itemprop" in meta.attrs:
+                    props.setdefault(meta.attrs["itemprop"], []).append(
+                        meta.attrs.get("content", "")
+                    )
+            wrapper = next(
+                (a for a in node.ancestors() if "hm-control" in _tokens(a.attrs.get("class"))),
+                None,
+            )
+            items.append(
+                MicrodataItem(
+                    itemtype=ITEMTYPE,
+                    props={k: tuple(v) for k, v in props.items()},
+                    wrapper_id=wrapper.attrs.get("id") if wrapper else None,
+                )
+            )
+        return tuple(items)
 
 
 def extract(html: str) -> Page:
@@ -282,8 +321,18 @@ def extract(html: str) -> Page:
             n.tag,
             {k: v for k, v in n.attrs.items() if k.startswith("hx-")},
             n.tag in _NATIVE_CONTROLS or any(d.tag in _NATIVE_CONTROLS for d in n.walk()),
+            any(a.tag == "form" and a.attrs.get("action") for a in n.ancestors()),
         )
         for n in nodes
         if any(k.startswith("hx-") for k in n.attrs)
     )
-    return Page(controls=controls, ids=ids, text_by_id=text_by_id, hx_elements=hx_elements)
+    return Page(
+        controls=controls,
+        ids=ids,
+        text_by_id=text_by_id,
+        hx_elements=hx_elements,
+        microdata=extractor.microdata_items(),
+        root_ids=tuple(
+            c.attrs["id"] for c in builder.root.children if isinstance(c, _Node) and "id" in c.attrs
+        ),
+    )

@@ -1,4 +1,4 @@
-from hypermediator.extract import extract
+from hypermediator.extract import MicrodataItem, extract
 
 RENEW = "https://locallibrary.example/rels/renew"
 
@@ -148,10 +148,10 @@ def test_hx_elements_recorded() -> None:
         '<br><input hx-post="/z/" name="q"><span hx-get="/b/">no</span>'
     )
     assert page.hx_elements == (
-        ("div", {"hx-boost": "true"}, False),
-        ("div", {"hx-get": "/a/"}, True),
-        ("input", {"hx-post": "/z/"}, True),
-        ("span", {"hx-get": "/b/"}, False),
+        ("div", {"hx-boost": "true"}, False, False),
+        ("div", {"hx-get": "/a/"}, True, False),
+        ("input", {"hx-post": "/z/"}, True, False),
+        ("span", {"hx-get": "/b/"}, False, False),
     )
 
 
@@ -164,3 +164,43 @@ def test_element_rel_excludes_microdata_rels() -> None:
     (control,) = page.controls
     assert control.element_rel == ("next",)
     assert control.rel == ("next", RENEW)
+
+
+def test_hx_element_in_actionable_form() -> None:
+    page = extract(
+        '<form action="/a/"><button hx-post="/a/">go</button></form>'
+        '<form action=""><button hx-post="/b/">go</button></form>'
+        '<form><button hx-post="/c/">go</button></form>'
+    )
+    assert [e[3] for e in page.hx_elements] == [True, False, False]
+
+
+def test_control_attrs_and_ancestor_ids() -> None:
+    page = extract(
+        '<div id="outer"><span id="mid" class="hm-control">'
+        '<a role="link" aria-disabled="true">Go</a></span></div>'
+    )
+    (control,) = page.controls
+    assert control.attrs == {"role": "link", "aria-disabled": "true"}
+    assert control.ancestor_ids == ("mid", "outer")
+
+
+def test_page_microdata_includes_unresolved_items() -> None:
+    page = extract(
+        '<span class="hm-control" id="w"><span hidden itemscope '
+        'itemtype="urn:hypermediator:Affordance"><meta itemprop="name" content="n">'
+        '<meta itemprop="rel" content="next"><meta itemprop="rel" content="edit"></span></span>'
+        '<span itemscope itemtype="urn:other"><meta itemprop="name" content="x"></span>'
+    )
+    assert page.microdata == (
+        MicrodataItem(
+            itemtype="urn:hypermediator:Affordance",
+            props={"name": ("n",), "rel": ("next", "edit")},
+            wrapper_id="w",
+        ),
+    )
+
+
+def test_page_root_ids() -> None:
+    page = extract('<div id="a"><p id="inner"></p></div><p>none</p><span id="b"></span>')
+    assert page.root_ids == ("a", "b")

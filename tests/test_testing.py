@@ -162,3 +162,66 @@ def test_get_does_not_change_state(client: Client) -> None:
     assert_get_does_not_change_state(client, "/widget/1/")
     with pytest.raises(AssertionError, match=r"tests\.Widget"):
         assert_get_does_not_change_state(client, "/mutating/")
+
+
+def test_l4_lone_button_or_input_with_hx_needs_actionable_form() -> None:
+    for tag in ("button", "input", "select", "textarea"):
+        lone = f'<{tag} name="q" hx-post="/x/">Go</{tag}>'
+        assert any(f"<{tag}>" in v for v in _found(lone, "L4")), tag
+        inside = f'<form action="/x/" method="post"><{tag} name="q" hx-post="/x/">Go</{tag}></form>'
+        assert not any(f"<{tag}>" in v for v in _found(inside, "L4")), tag
+    no_action = '<form method="post"><button hx-post="/x/">Go</button></form>'
+    assert any("<button>" in v for v in _found(no_action, "L4"))
+
+
+def test_l4_only_get_and_post_verbs() -> None:
+    for verb in ("hx-put", "hx-patch", "hx-delete"):
+        html = f'<form action="/x/" method="post" {verb}="/x/"><button>Go</button></form>'
+        assert any(verb in v for v in _found(html, "L4")), verb
+    assert (
+        _found('<form action="/x/" method="post" hx-post="/x/"><button>Go</button></form>', "L4")
+        == []
+    )
+
+
+def test_same_affordances_region_is_fragment_roots() -> None:
+    region = '<div id="region">{}</div>'
+    full = _response(region.format(_link("a") + _link("b")) + _link("c"))
+    fragment = _response(region.format(_link("a")))
+    with pytest.raises(AssertionError):
+        assert_same_affordances(full, fragment)
+    assert_same_affordances(_response(region.format(_link("a")) + _link("c")), fragment)
+
+
+def test_l1_form_without_action_is_a_violation() -> None:
+    html = (
+        '<form id="f" method="post"><button disabled aria-describedby="r">Go</button></form>'
+        '<p id="r">why</p>'
+    )
+    assert any("action" in v for v in _found(html, "L1"))
+    assert _found('<form id="f" action="/x/" method="post"><button>Go</button></form>', "L1") == []
+
+
+def test_l3_every_microdata_item_resolves() -> None:
+    unresolved = _link("a").replace('content="hm-a-c"', 'content="missing"')
+    assert any("'missing'" in v for v in _found(unresolved, "L3"))
+    no_control = (
+        '<span hidden itemscope itemtype="urn:hypermediator:Affordance">'
+        '<meta itemprop="name" content="n"></span>'
+    )
+    assert any("no control" in v for v in _found(no_control, "L3"))
+    assert _found(_link("a"), "L3") == []
+
+
+def test_l2_anchor_with_role_link_and_no_reason_is_not_skipped() -> None:
+    html = '<a id="x" role="link" aria-disabled="true">Go</a>'
+    assert any("reason" in v for v in _found(html, "L2"))
+    assert violations(_response('<a id="top">anchor</a>')) == []
+
+
+@pytest.mark.django_db
+def test_get_returns_response_and_rejects_error_status(client: Client) -> None:
+    Widget.objects.create(name="w")
+    assert assert_get_does_not_change_state(client, "/widget/1/").status_code == 200
+    with pytest.raises(AssertionError, match="404"):
+        assert_get_does_not_change_state(client, "/no-such-path/")
