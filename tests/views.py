@@ -1,6 +1,7 @@
 """Test-only views declaring affordances."""
 
 import uuid
+from types import MappingProxyType
 
 from django import forms
 from django.contrib.auth.decorators import login_required
@@ -12,7 +13,7 @@ from django.views import View
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 
-from hypermediator.affordances import Affordance
+from hypermediator.affordances import Affordance, Placement
 from hypermediator.shortcuts import render
 from hypermediator.views import HypermediaMixin, affordance
 from tests.models import Gadget, Widget
@@ -134,3 +135,36 @@ def pipeline_fbv(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         return redirect("/widgets/")
     return render(request, "pipeline/form.html", {"form": form}, partial="body")
+
+
+class WidgetNext(HypermediaMixin, View):
+    affordance = Affordance("Next", rel=("next", "edit", "https://example.com/rel/x"))
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return HttpResponse("next")
+
+
+OVERRIDE = Placement(target="#panel", swap="innerHTML", select="#panel")
+
+
+class WidgetPage(HypermediaMixin, View):
+    placements = MappingProxyType({"widget-renew": OVERRIDE})
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return HttpResponse("page")
+
+
+@affordance(label="Page fn", placements={"widget-renew": OVERRIDE})
+def widget_page_fbv(request: HttpRequest) -> HttpResponse:
+    return HttpResponse("page")
+
+
+class RenewForm(forms.Form):
+    renewal_date = forms.DateField()
+
+
+class RenewFormView(HypermediaMixin, FormView):  # type: ignore[type-arg]
+    form_class = RenewForm
+    template_name = "tags/renew.html"
+    success_url = "/widgets/"
+    affordance = Affordance("Renew book")

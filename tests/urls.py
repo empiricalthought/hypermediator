@@ -23,5 +23,9 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("pipeline/cbv/", views.PipelineCbv.as_view(), name="pipeline-cbv"),
     path("pipeline/fbv/", views.pipeline_fbv, name="pipeline-fbv"),
     path("pipeline/plain/", views.PlainFormView.as_view(), name="pipeline-plain"),
+    path("widgets/next/", views.WidgetNext.as_view(), name="widget-next"),
+    path("widgets/page/", views.WidgetPage.as_view(), name="widget-page"),
+    path("widgets/page-fn/", views.widget_page_fbv, name="widget-page-fbv"),
+    path("renew-form/", views.RenewFormView.as_view(), name="renew-form"),
     path("plain/", views.WidgetUndeclared.as_view(), name="widget-plain"),
 ]

@@ -14,11 +14,11 @@ from django.forms import BaseForm
 from django.http import HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.views.generic.detail import SingleObjectMixin
 
 from hypermediator.affordances import Affordance, Placement
 from hypermediator.htmx import is_partial
-from hypermediator.microdata import ITEMTYPE
 from hypermediator.shortcuts import finish_response, partial_name, resolve_placement
 
 if TYPE_CHECKING:
@@ -45,21 +45,27 @@ def unavailable_response(
     request: HttpRequest, endpoint: Endpoint, obj: Model | None, reason: str
 ) -> HttpResponse:
     """The 409 for a use-it failure on submit: the disabled control, with the page's wrapper id."""
-    from hypermediator.endpoints import dom_id_for
+    from hypermediator.endpoints import Bound, dom_id_for
+    from hypermediator.templatetags.hypermediator import render_link
 
     dom_id = dom_id_for(endpoint.name, obj)
+    bound = Bound(
+        endpoint=endpoint,
+        url=reverse(endpoint.name, kwargs={} if obj is None else {"pk": obj.pk}),
+        obj=obj,
+        state="disabled",
+        reason=reason,
+        dom_id=dom_id,
+        placement=Placement.PAGE if obj is None else Placement.ITEM,
+    )
     get_absolute_url = getattr(obj, "get_absolute_url", None)
     response = render(
         request,
         "hypermediator/unavailable.html",
         {
-            "dom_id": dom_id,
-            "name": endpoint.name,
             "label": endpoint.affordance.label,
-            "rels": endpoint.affordance.rel,
-            "reason": reason,
+            "control": render_link(request, bound),
             "back_url": get_absolute_url() if callable(get_absolute_url) else None,
-            "itemtype": ITEMTYPE,
         },
         status=409,
     )
