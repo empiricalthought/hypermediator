@@ -17,7 +17,9 @@ from django.shortcuts import get_object_or_404, render
 from django.views.generic.detail import SingleObjectMixin
 
 from hypermediator.affordances import Affordance, Placement
+from hypermediator.htmx import is_partial
 from hypermediator.microdata import ITEMTYPE
+from hypermediator.shortcuts import finish_response, partial_name, resolve_placement
 
 if TYPE_CHECKING:
     from hypermediator.endpoints import Endpoint
@@ -97,7 +99,34 @@ class HypermediaMixin:
             handler = getattr(self, method, None)
             if handler is not None:
                 setattr(self, method, self._guarded(handler))
-        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc,no-any-return]
+        response: HttpResponseBase = super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
+        placement = resolve_placement(
+            self.affordance.placement if self.affordance else None, getattr(self, "kwargs", {})
+        )
+        return finish_response(request, response, placement)
+
+    def render_to_response(self, context: dict[str, Any], **response_kwargs: Any) -> HttpResponse:
+        """Render the declared partial for a partial request, else the whole template."""
+        request: HttpRequest = self.request  # type: ignore[attr-defined]
+        if self.partial is None or not is_partial(request):
+            response: HttpResponse = super().render_to_response(  # type: ignore[misc]
+                context, **response_kwargs
+            )
+            return response
+        names = [partial_name(request, name, self.partial) for name in self.get_template_names()]  # type: ignore[attr-defined]
+        response_kwargs.setdefault("content_type", getattr(self, "content_type", None))
+        return self.response_class(  # type: ignore[attr-defined,no-any-return]
+            request=request,
+            template=names,
+            context=context,
+            using=getattr(self, "template_engine", None),
+            **response_kwargs,
+        )
+
+    def form_invalid(self, form: BaseForm) -> HttpResponse:
+        """An invalid submit is a 422, so htmx swaps the re-rendered form."""
+        context = self.get_context_data(form=form)  # type: ignore[attr-defined]
+        return self.render_to_response(context, status=422)
 
     def _guarded(self, handler: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:
         @functools.wraps(handler)
@@ -160,7 +189,10 @@ def affordance(
                 reason = unavailable(request, obj)
                 if reason is not None:
                     return unavailable_response(request, _current_endpoint(request), obj, reason)
-            return view(request, *args, **kwargs)
+            response = view(request, *args, **kwargs)
+            return finish_response(
+                request, response, resolve_placement(declaration.affordance.placement, kwargs)
+            )
 
         wrapper.hypermediator = declaration  # type: ignore[attr-defined]
         return cast(_V, wrapper)

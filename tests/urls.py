@@ -20,5 +20,8 @@ urlpatterns: list[URLPattern | URLResolver] = [
             namespace="ns",
         ),
     ),
+    path("pipeline/cbv/", views.PipelineCbv.as_view(), name="pipeline-cbv"),
+    path("pipeline/fbv/", views.pipeline_fbv, name="pipeline-fbv"),
+    path("pipeline/plain/", views.PlainFormView.as_view(), name="pipeline-plain"),
     path("plain/", views.WidgetUndeclared.as_view(), name="widget-plain"),
 ]

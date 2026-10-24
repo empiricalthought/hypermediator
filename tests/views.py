@@ -2,15 +2,18 @@
 
 import uuid
 
+from django import forms
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
+from django.shortcuts import redirect
 from django.views import View
 from django.views.generic.detail import DetailView, SingleObjectMixin
-from django.views.generic.edit import CreateView, DeleteView, UpdateView
+from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 
 from hypermediator.affordances import Affordance
+from hypermediator.shortcuts import render
 from hypermediator.views import HypermediaMixin, affordance
 from tests.models import Gadget, Widget
 
@@ -105,3 +108,29 @@ class PlainDetailView(DetailView):  # type: ignore[type-arg]
 )
 def gadget_renew(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
     return HttpResponse("renewed")
+
+
+class PipelineForm(forms.Form):
+    name = forms.CharField()
+
+
+class PipelineCbv(HypermediaMixin, FormView):  # type: ignore[type-arg]
+    form_class = PipelineForm
+    template_name = "pipeline/form.html"
+    partial = "body"
+    success_url = "/widgets/"
+    affordance = Affordance("Pipeline")
+
+
+class PlainFormView(FormView):  # type: ignore[type-arg]
+    form_class = PipelineForm
+    template_name = "pipeline/form.html"
+    success_url = "/widgets/"
+
+
+@affordance(label="Pipeline fn", form_class=PipelineForm, partial="body")
+def pipeline_fbv(request: HttpRequest) -> HttpResponse:
+    form = PipelineForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        return redirect("/widgets/")
+    return render(request, "pipeline/form.html", {"form": form}, partial="body")
