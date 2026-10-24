@@ -92,6 +92,21 @@ def _render(
     element: Literal["a", "form"],
     **extra: Any,
 ) -> SafeString:
+    """Render a control template with the public template context.
+
+    These variables are public API; templates that override ``hypermediator/*.html`` may rely
+    on them, and they are not renamed without a major version:
+
+    - ``bound``: the bound affordance. ``bound.dom_id`` (the wrapper id), ``bound.reason``
+      (why it is disabled, empty when enabled), ``bound.url``, ``bound.state`` (``"enabled"``
+      or ``"disabled"``; hidden controls are never rendered) and ``bound.endpoint.name``.
+    - ``label``: the affordance's label.
+    - ``rels``: all rel tokens, for the microdata.
+    - ``html_rel``: the rel tokens valid on the element, space-joined (``""`` when none).
+    - ``hx``: a dict of htmx attributes (empty when disabled).
+    - ``itemtype``: the microdata item type.
+    - ``form`` and ``rows``: for ``form.html`` only; the form and its ``(field, current)`` pairs.
+    """
     affordance = bound.endpoint.affordance
     return render_to_string(
         template_name,

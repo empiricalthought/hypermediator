@@ -12,8 +12,6 @@
 }
 
 .hm-reason {
-  margin-left: 0.5em;
   color: var(--bs-secondary-color);
-  font-size: 0.875em;
   font-style: italic;
 }
