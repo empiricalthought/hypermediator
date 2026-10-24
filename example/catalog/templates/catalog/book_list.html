@@ -3,6 +3,7 @@
 
 {% block content %}
 {% partialdef content inline %}
+  <div id="book-list">
   <h1>Book List</h1>
   {% hm_link "book-create" %}
   {% if book_list %}
@@ -17,5 +18,6 @@
   {% else %}
     <p>There are no books in the library.</p>
   {% endif %}
+  </div>
 {% endpartialdef %}
 {% endblock %}

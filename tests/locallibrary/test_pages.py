@@ -192,3 +192,9 @@ def test_schema_org_book_props_not_captured(client: Client, librarian: User, boo
     affordances = list(walker.props_of("urn:hypermediator:Affordance"))
     assert affordances
     assert all("control" in item for item in affordances)
+
+
+def test_login_page_conforms_for_anonymous(client: Client) -> None:
+    response = client.get("/accounts/login/")
+    assert response.status_code == 200
+    assert_conforms(response)

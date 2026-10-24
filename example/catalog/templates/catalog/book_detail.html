@@ -3,7 +3,7 @@
 
 {% block content %}
 {% partialdef content inline %}
-  <div itemscope itemtype="https://schema.org/Book">
+  <div id="book-{{ book.pk }}" itemscope itemtype="https://schema.org/Book">
     <h1>Title: <span itemprop="name">{{ book.title }}</span></h1>
 
     <p><strong>Author:</strong> <a href="{{ book.author.get_absolute_url }}">{{ book.author }}</a></p>

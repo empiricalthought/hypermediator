@@ -2,6 +2,7 @@
 
 {% block content %}
 {% partialdef content inline %}
+  <div id="home">
   <h1>Local Library Home</h1>
   <p>
     Welcome to LocalLibrary, a website developed by
@@ -16,5 +17,6 @@
     <li><strong>Authors:</strong> {{ num_authors }}</li>
   </ul>
   <p>You have visited this page {{ num_visits }} time{{ num_visits|pluralize }}.</p>
+  </div>
 {% endpartialdef %}
 {% endblock %}

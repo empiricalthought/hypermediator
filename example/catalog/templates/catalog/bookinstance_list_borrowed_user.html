@@ -2,6 +2,7 @@
 
 {% block content %}
 {% partialdef content inline %}
+  <div id="my-borrowed-list">
   <h1>Borrowed books</h1>
 
   {% if bookinstance_list %}
@@ -13,5 +14,6 @@
   {% else %}
     <p>There are no books borrowed.</p>
   {% endif %}
+  </div>
 {% endpartialdef %}
 {% endblock %}

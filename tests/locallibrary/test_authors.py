@@ -7,6 +7,7 @@ from django.test import Client
 from django.urls import reverse
 
 from catalog.models import Author, Book
+from hypermediator.extract import extract
 from hypermediator.testing import assert_conforms
 
 FINGERPRINT = re.compile(
@@ -80,6 +81,10 @@ def test_author_stale_update_409_then_resubmit_ok(
     conflict = client.post(url, _update_data(author, stale, first_name="Octavia E."))
     assert conflict.status_code == 409
     assert Author.objects.get(pk=author.pk).first_name == "Octavia"
+    assert (
+        "Current value: Changed Elsewhere"
+        in extract(conflict.content.decode()).text_by_id["id_last_name_current"]
+    )
 
     fresh = _fingerprint(conflict.content.decode())
     assert fresh != stale
@@ -93,7 +98,12 @@ def test_author_invalid_422(client: Client, librarian: User) -> None:
     client.force_login(librarian)
     response = client.post(reverse("author-create"), {"first_name": "", "last_name": ""})
     assert response.status_code == 422
-    assert_conforms(response)
+    page = assert_conforms(response)
+    assert page.text_by_id["id_first_name_error"]
+    assert "id_first_name_error" in response.content.decode()
+    [create] = page.by_name("author-create")
+    field = next(f for f in create.fields if f.name == "first_name")
+    assert "id_first_name_error" in field.described_by
     assert not Author.objects.exists()
 
 

@@ -145,13 +145,10 @@ def test_same_affordances_detects_state_and_missing_controls() -> None:
         assert_same_affordances(_response(_link("a")), _response(_link("a") + _link("b")))
 
 
-def test_same_affordances_fragment_without_root_ids_must_be_contained_in_full() -> None:
-    full = _response(_link("a") + _disabled("b") + _link("c"))
-    assert_same_affordances(full, _response("<div>" + _link("a") + _disabled("b") + "</div>"))
-    with pytest.raises(AssertionError):
-        assert_same_affordances(full, _response("<div>" + _link("b") + "</div>"))
-    with pytest.raises(AssertionError):
-        assert_same_affordances(full, _response("<div>" + _link("d") + "</div>"))
+def test_same_affordances_fragment_without_root_id_cannot_be_located() -> None:
+    full = _response(_link("a") + _disabled("b"))
+    with pytest.raises(AssertionError, match="fragment root has no id; cannot locate its region"):
+        assert_same_affordances(full, _response("<div>" + _link("a") + _disabled("b") + "</div>"))
 
 
 @pytest.mark.django_db

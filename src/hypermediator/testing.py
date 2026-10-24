@@ -164,19 +164,14 @@ def assert_same_affordances(full: HttpResponseBase, fragment: HttpResponseBase) 
     full_page = _page_of(full)
     expected = Counter((c.name, _state_of(c)) for c in fragment_page.controls if _is_managed(c))
     roots = set(fragment_page.root_ids)
-    if roots:
-        actual = Counter(
-            (c.name, _state_of(c))
-            for c in full_page.controls
-            if _is_managed(c) and (c.wrapper_id in roots or roots & set(c.ancestor_ids))
-        )
-        matches = expected == actual
-    else:
-        # No root element carries an id, so the fragment's region cannot be located in the full
-        # page: every fragment affordance must then appear there in the same state.
-        actual = Counter((c.name, _state_of(c)) for c in full_page.controls if _is_managed(c))
-        matches = not expected - actual
-    if not matches:
+    if not roots:
+        raise AssertionError("fragment root has no id; cannot locate its region in the full page")
+    actual = Counter(
+        (c.name, _state_of(c))
+        for c in full_page.controls
+        if _is_managed(c) and (c.wrapper_id in roots or roots & set(c.ancestor_ids))
+    )
+    if expected != actual:
         raise AssertionError(
             f"Fragment affordances {sorted(expected.elements(), key=str)} differ from the "
             f"full page's {sorted(actual.elements(), key=str)} in the same region"

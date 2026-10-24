@@ -3,6 +3,7 @@
 
 {% block content %}
 {% partialdef content inline %}
+  <div id="book-delete-page">
   <h1>Delete Book: {{ book }}</h1>
 
   {% if book.bookinstance_set.all %}
@@ -16,5 +17,6 @@
     <p>Are you sure you want to delete the book?</p>
   {% endif %}
   {% hm_action "book-delete" book %}
+  </div>
 {% endpartialdef %}
 {% endblock %}

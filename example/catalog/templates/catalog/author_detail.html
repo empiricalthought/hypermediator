@@ -3,7 +3,7 @@
 
 {% block content %}
 {% partialdef content inline %}
-  <div itemscope itemtype="https://schema.org/Person">
+  <div id="author-{{ author.pk }}" itemscope itemtype="https://schema.org/Person">
     <h1>Author: <span itemprop="name">{{ author }}</span></h1>
     <p>{{ author.date_of_birth|default_if_none:"" }} - {{ author.date_of_death|default_if_none:"" }}</p>
     <p>{% hm_link "author-update" author %} {% hm_link "author-delete" author %}</p>
