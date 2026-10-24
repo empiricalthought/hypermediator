@@ -30,7 +30,7 @@ def check_declarations(
     app_configs: Iterable[AppConfig] | None = None, **kwargs: Any
 ) -> list[CheckMessage]:
     messages: list[CheckMessage] = []
-    for url_name, pattern in url_routes():
+    for url_name, pattern, _kwargs in url_routes():
         callback = pattern.callback
         view_class: type | None = getattr(callback, "view_class", None)
         declaration: FunctionDeclaration | None = getattr(callback, "hypermediator", None)

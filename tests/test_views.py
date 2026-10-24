@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
+from django.template import engines
 from django.test import Client, RequestFactory, override_settings
 from django.urls import NoReverseMatch, reverse
 
@@ -358,3 +359,47 @@ def test_fbv_url_kwargs_maps_the_object_to_its_route() -> None:
     widget = Widget.objects.create(name="sprocket")
     bound = bind(request_for(None), "widget-rename-fbv", widget)
     assert bound.url == reverse("widget-rename-fbv", kwargs={"name": "sprocket"})
+
+
+@override_settings(ROOT_URLCONF="tests.urls_include")
+def test_include_prefix_pk_binds_and_renders(widget: Widget) -> None:
+    endpoint_for.cache_clear()
+    try:
+        bound = bind(request_for(make_user("editor", can_change=True)), "inc-renew", widget)
+        assert bound.url == f"/lib/{widget.pk}/renew/"
+        user = make_user("editor2", can_change=True)
+        html = (
+            engines["django"]
+            .from_string("{% load hypermediator %}{% hm_link 'inc-renew' w %}")
+            .render({"request": request_for(user), "w": widget})
+        )
+        [control] = extract(html).by_name("inc-renew")
+        assert control.wrapper_id == f"hm-inc-renew-{widget.pk}"
+    finally:
+        endpoint_for.cache_clear()
+
+
+@override_settings(ROOT_URLCONF="tests.urls_include")
+def test_include_prefix_pk_409_renders() -> None:
+    endpoint_for.cache_clear()
+    try:
+        retired = Widget.objects.create(name="r", status="retired")
+        client = Client()
+        client.force_login(make_user("editor", can_change=True))
+        response = client.post(f"/lib/{retired.pk}/renew/")
+        assert response.status_code == 409
+        [control] = extract(response.content.decode()).by_name("inc-renew")
+        assert not control.enabled
+        assert control.wrapper_id == f"hm-inc-renew-{retired.pk}"
+    finally:
+        endpoint_for.cache_clear()
+
+
+@override_settings(ROOT_URLCONF="tests.urls_include")
+def test_route_without_pk_or_slug_kwarg_is_improperly_configured(widget: Widget) -> None:
+    endpoint_for.cache_clear()
+    try:
+        with pytest.raises(ImproperlyConfigured, match=r"odd-renew.*ident"):
+            bind(request_for(make_user("editor", can_change=True)), "odd-renew", widget)
+    finally:
+        endpoint_for.cache_clear()

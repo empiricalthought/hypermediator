@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.signals import setting_changed
 from django.db.models import Model
 from django.http import HttpRequest
@@ -51,6 +52,12 @@ class Endpoint:
         if pk_kwarg in self.route_kwargs:
             return {pk_kwarg: obj.pk}
         slug_kwarg: str = getattr(self.view_class, "slug_url_kwarg", "slug")
+        if slug_kwarg not in self.route_kwargs:
+            raise ImproperlyConfigured(
+                f"URL '{self.name}' captures {sorted(self.route_kwargs)}, which includes neither "
+                f"pk_url_kwarg ('{pk_kwarg}') nor slug_url_kwarg ('{slug_kwarg}'); "
+                "hypermediator cannot build its URL for an object."
+            )
         slug_field: str = getattr(self.view_class, "slug_field", "slug")
         return {slug_kwarg: getattr(obj, slug_field)}
 
@@ -92,36 +99,37 @@ def _allowed_methods(view_class: type) -> frozenset[str]:
     return frozenset({"GET", "POST"} if hasattr(view_class, "post") else {"GET"})
 
 
-def url_routes() -> Iterator[tuple[str | None, URLPattern]]:
-    """Every route in the URLconf with its namespaced name (None when the route is unnamed)."""
+def url_routes() -> Iterator[tuple[str | None, URLPattern, frozenset[str]]]:
+    """Every route in the URLconf: its namespaced name (None when unnamed), the pattern, and the
+    kwargs captured by the route and every enclosing include() prefix."""
 
     def walk(
-        patterns: Iterable[URLPattern | URLResolver], prefix: str
-    ) -> Iterator[tuple[str | None, URLPattern]]:
+        patterns: Iterable[URLPattern | URLResolver], prefix: str, kwargs: frozenset[str]
+    ) -> Iterator[tuple[str | None, URLPattern, frozenset[str]]]:
         for pattern in patterns:
+            captured = kwargs | frozenset(pattern.pattern.regex.groupindex)
             if isinstance(pattern, URLResolver):
                 inner = f"{prefix}{pattern.namespace}:" if pattern.namespace else prefix
-                yield from walk(pattern.url_patterns, inner)
+                yield from walk(pattern.url_patterns, inner, captured)
             else:
-                yield (f"{prefix}{pattern.name}" if pattern.name else None), pattern
+                yield (f"{prefix}{pattern.name}" if pattern.name else None), pattern, captured
 
-    return walk(get_resolver().url_patterns, "")
+    return walk(get_resolver().url_patterns, "", frozenset())
 
 
-def _find_route(url_name: str) -> URLPattern:
-    """The route with this (namespaced) name; no URL kwargs are needed."""
-    for name, pattern in url_routes():
+def _find_route(url_name: str) -> tuple[URLPattern, frozenset[str]]:
+    """The route with this (namespaced) name and its captured kwargs; no URL kwargs are needed."""
+    for name, pattern, kwargs in url_routes():
         if name == url_name:
-            return pattern
+            return pattern, kwargs
     raise NoReverseMatch(f"Reverse for '{url_name}' not found.")
 
 
 @functools.cache
 def endpoint_for(url_name: str) -> Endpoint | None:
     """The endpoint behind a URL name, or None when its view declares no affordance."""
-    route = _find_route(url_name)
+    route, route_kwargs = _find_route(url_name)
     func: Callable[..., Any] = route.callback
-    route_kwargs = frozenset(route.pattern.regex.groupindex)
     declaration: FunctionDeclaration | None = getattr(func, "hypermediator", None)
     if declaration is not None:
         return Endpoint(
