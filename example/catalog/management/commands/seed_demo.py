@@ -35,6 +35,9 @@ class Command(BaseCommand):
             user.set_password(password)
             user.save()
             users[name] = user
+        # MDN's librarians are staff users; the sidebar's Staff section needs is_staff.
+        users["librarian"].is_staff = True
+        users["librarian"].save()
         users["librarian"].user_permissions.set(
             Permission.objects.filter(codename__in=LIBRARIAN_PERMS)
         )
