@@ -12,5 +12,6 @@ uv run pytest      # tests
 uv run ruff check  # lint
 uv run ruff format # format
 uv run mypy        # type-check
+uv run bandit -c pyproject.toml -r src  # security scan
 uv build           # build sdist and wheel
 ```

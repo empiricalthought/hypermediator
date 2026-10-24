@@ -38,7 +38,7 @@ class Endpoint:
     declaration: FunctionDeclaration | None = field(default=None, compare=False, repr=False)
 
     def _instantiate(self, request: HttpRequest, kwargs: Mapping[str, Any]) -> Any:
-        assert self.view_class is not None
+        assert self.view_class is not None  # nosec B101
         view = self.view_class(**self.view_initkwargs)
         view.setup(request, **kwargs)
         return view

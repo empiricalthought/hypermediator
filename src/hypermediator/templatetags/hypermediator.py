@@ -80,7 +80,7 @@ def _render(
     **extra: Any,
 ) -> SafeString:
     affordance = bound.endpoint.affordance
-    return SafeString(
+    return SafeString(  # nosec B703 B308
         render_to_string(
             template_name,
             {
