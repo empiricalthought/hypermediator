@@ -9,6 +9,7 @@ from django.apps import AppConfig
 from django.core.checks import CheckMessage, Error, Tags, Warning, register
 
 from hypermediator.endpoints import _allowed_methods, url_routes
+from hypermediator.lint import lint_files
 from hypermediator.views import FunctionDeclaration, HypermediaMixin
 
 _NOT_HANDLERS = frozenset({"HEAD", "OPTIONS"})
@@ -98,3 +99,14 @@ def _check_view_class(view_class: type, label: str) -> list[CheckMessage]:
             )
         )
     return messages
+
+
+@register("hypermediator_templates")
+def check_templates(
+    app_configs: Iterable[AppConfig] | None = None, **kwargs: Any
+) -> list[CheckMessage]:
+    """Report hand-written links and forms to affordances; never an error."""
+    return [
+        Warning(issue.message, obj=str(path), id="hypermediator.W101")
+        for path, issue in lint_files()
+    ]
