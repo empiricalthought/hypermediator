@@ -63,6 +63,7 @@ These would make the release a failure even if it technically works:
 |---|---|
 | Invalid form submission returns 422, not 200, on views that opt into hypermediator only (not Django's auth views, the admin, or other views) | Approved |
 | `Vary: HX-Request, HX-Request-Type` added to responses that may be served as a fragment | Approved |
+| `Link` header for affordances the developer selects (`link_header`), via opt-in middleware | Approved |
 | `LoginRequiredMixin` behaviour | Not changed (Django default) |
 | `Allow` header | Not changed (Django derives it from handler methods); mismatches with declared affordances are reported by system checks and asserted by tests |
 
@@ -109,7 +110,7 @@ Fragments come from Django 6 template partials (`{% partialdef %}`, rendered as 
 
 ### Rels and microdata
 
-- Rels are the application's, declared per affordance on the view. Registered rels go on `a` and `link` only where HTML allows them. Extension (URI) rels are mirrored into `Link` headers or a linkset.
+- Rels are the application's, declared per affordance on the view. Registered rels go on `a` and `link` only where HTML allows them. Affordances the developer selects (`link_header`, which the referencing page may override) are mirrored into `Link` headers or a linkset as URI rels, where IANA and extension rels are legal.
 - Hypermediator uses its own microdata item type, in its own namespace, only to carry affordance facts a machine needs and HTML cannot state natively (for example, an action's identity on its form, or its rel where HTML forbids one).
 - **Requirement:** under microdata scoping, an `itemprop` belongs to its nearest `itemscope` ancestor. Hypermediator's items must never capture application properties (for instance by wrapping application content inside a hypermediator `itemscope`). The technique (property placement, `itemref`, etc.) is the builder's.
 

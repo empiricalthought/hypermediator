@@ -123,6 +123,20 @@ For an htmx submit, a redirect returned by the view's handler becomes a 200 with
 so htmx navigates to it, unless the request refreshes an item (`HX-Hm-Item`), whose redirect is
 followed and swapped. Redirects from auth mixins and decorators are left as Django's.
 
+### The `Link` header
+
+`HypermediatorMiddleware` mirrors selected affordances into the response's `Link` header as rels
+(`</books/1/renew/>; rel="https://example.com/rels/renew"`). Selection is opt-in: declare
+`link_header=True` on the affordance (`Affordance(..., link_header=True)` or
+`@affordance(..., link_header=True)`). An entry is emitted only for an affordance that is selected,
+has a rel, and rendered enabled on the page.
+
+The referencing page can override the default for a URL name, as it can a placement: set
+`link_headers = {"renew-book-librarian": False}` on a `HypermediaMixin` view, or pass
+`link_headers={...}` to `@affordance` on a function view. `True` selects an affordance whose
+default is off; `False` deselects one whose default is on. `hypermediator.W003` warns about a
+`link_header=True` affordance with no rel.
+
 ### Template tags
 
 Load them with `{% load hypermediator %}` in every template that uses them.
@@ -156,15 +170,16 @@ them.
 ### Checks and linter
 
 `manage.py check` validates affordance declarations (`hypermediator.E001`, `E002`, `W001`,
-`W002`). The template linter flags hand-written links that bypass an affordance
+`W002`, `W003`). The template linter flags hand-written links that bypass an affordance
 (`hypermediator.W101`) and runs alone with `manage.py check --tag hypermediator_templates`.
 
 ### Where it differs from Django
 
 - On hypermediator views, an invalid form returns 422 instead of 200.
 - On hypermediator views, responses carry `Vary: HX-Request, HX-Request-Type`.
-- `HypermediatorMiddleware`, which is opt-in, adds a `Link` response header listing the enabled
-  affordances a response rendered that declare a rel.
+- `HypermediatorMiddleware`, which is opt-in, adds a `Link` response header for the affordances
+  you select with `link_header` (see "The `Link` header" above): only those a response rendered
+  enabled, that declare a rel. With nothing selected it adds no header.
 
 Login redirects, `Allow`, auth views and the admin behave as Django's do.
 
