@@ -1,0 +1,49 @@
+[project]
+name = "hypermediator"
+version = "0.1.0"
+description = "Declare affordances once; make HTML apps built for people and enhanced with htmx operable by agents."
+readme = "README.md"
+requires-python = ">=3.14"
+classifiers = [
+    "Framework :: Django",
+    "Framework :: Django :: 6.1",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "django>=6.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "django-stubs>=6.1.2",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-django>=4.14.0",
+    "ruff>=0.17.2",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+plugins = ["mypy_django_plugin.main"]
+files = ["src", "tests"]
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"

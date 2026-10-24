@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<title>PRINCIPLES.html</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+
+</head>
+
+<body>
+
+<h1 id="hypermediator-design-principles">Hypermediator: Design
+Principles</h1>
+<p>Oct 17, 2026 · <span class="citation"
+data-cites="Steve">@Steve</span></p>
+<p>Hypermediator does for agents what accessibility-aware frameworks do
+for assistive technology: it makes the correct, machine-operable path
+the default in HTML applications built for people and enhanced with
+htmx.</p>
+<h2 id="foundations">Foundations</h2>
+<ol type="1">
+<li><strong>People first; agents read the same HTML.</strong> There is
+one representation. Agent accessibility is a property of the application
+people use, as human accessibility is.</li>
+<li><strong>Affordances are declared once, as data.</strong> Each link
+or action holds its request (rel, method, target, fields), trigger,
+placement (target region and swap) and availability rules, and is
+inspectable at runtime.</li>
+<li><strong>Two methods; the target names the action.</strong> An
+affordance’s method is GET or POST, the only two an HTML form can
+submit, so a browser without JavaScript and a plain HTTP client send the
+same request. GET never changes state. Each state-changing action has
+its own target URI and its own form, so the URI, not the method,
+identifies the action. This trades HTTP’s more precise methods for one
+request shape across every client.</li>
+<li><strong>Every affordance passes three checks: see it, use it, do
+it.</strong> The vocabulary is Apache Causeway’s. <em>See it</em>: may
+this user perform it (authorization)? <em>Use it</em>: does the current
+state allow it now (availability)? <em>Do it</em>: is the submitted
+input valid and consistent with current state (submission)? The first
+two run when rendering and again on submit; the third runs only on
+submit. Each check is a distinct predicate that returns a reason, and
+each layer expresses the outcome in its own terms.</li>
+<li><strong>Layers add; they never replace.</strong> Each layer adds a
+capability the ones below lack, and works without the ones above it. The
+floor: an agent reading only the accessibility tree can operate the
+app.</li>
+<li><strong>Agent accessibility is tested like human
+accessibility.</strong> The framework ships an extractor that asserts
+which affordances a page exposes in a given state. Each layer’s checks
+run against that set.</li>
+</ol>
+<h2 id="layers">Layers</h2>
+<p>Bottom up. Layers 1–3 serve people and agents alike; layer 4 serves
+people.</p>
+<h3 id="native-controls-operability-by-any-client">1. Native controls:
+operability by any client</h3>
+<p>Each of the three checks (foundation 4) has a native outcome and its
+own status code.</p>
+<ul>
+<li><strong>See it.</strong> A permitted affordance renders as an
+<code>a</code>, <code>form</code> or <code>button</code> with a real
+<code>href</code> or <code>action</code>, working without JavaScript.
+One the user may not perform is omitted; submitting it anyway returns
+403.</li>
+<li><strong>Use it.</strong> A permitted affordance that the current
+state rules out renders disabled, carrying its reason (named in layer
+2). How each control is disabled is the application’s choice. Submitting
+it anyway returns 409.</li>
+<li><strong>Do it.</strong> Field and cross-field checks run on submit.
+Invalid input returns 422, and a conflict with current state (a stale
+version, a taken value) returns 409. Either way the response re-renders
+the affected region with the user’s values, the reason from the failed
+check, and the control that resolves it. The status code, the reason and
+the remedy together make the error self-describing; a machine-readable
+problem-type identifier is optional layer 3 semantics.</li>
+<li><strong>Verified by:</strong> with JavaScript off, every enabled
+affordance can be followed or submitted; every form submits GET or POST,
+and no GET changes state; every enabled control has an <code>href</code>
+or <code>action</code>; each failed check returns its own status: 403,
+409, or 422/409.</li>
+</ul>
+<h3 id="names-and-labels-identification-in-words">2. Names and labels:
+identification in words</h3>
+<ul>
+<li>Accessible names, <code>&lt;label&gt;</code> associations and button
+text come from the affordance.</li>
+<li>A disabled control’s reason is attached with
+<code>aria-describedby</code>, for screen readers and agents alike.</li>
+<li><strong>Verified by:</strong> every control and field has a
+non-empty accessible name; every disabled control carries a described
+reason.</li>
+</ul>
+<h3 id="rels-and-microdata-stable-machine-meaning">3. Rels and
+microdata: stable machine meaning</h3>
+<ul>
+<li>Rels identify links by meaning, independent of wording or language.
+HTML carries only rel values valid for their element.</li>
+<li>Microdata types the data and carries extension semantics, including
+each action’s meaning on its form. Both are mirrored into
+<code>Link</code> headers or linksets as URI rels, where IANA and
+extension rels are legal.</li>
+<li>The <code>Allow</code> header is derived from the declared
+affordances, per target URI: GET and HEAD where a representation or form
+is served, POST where an action is accepted, OPTIONS where
+answered.</li>
+<li><strong>Verified by:</strong> HTML carries only rel values valid for
+their element; microdata matches its declared types; <code>Allow</code>
+equals the declared methods.</li>
+</ul>
+<h3 id="htmx-responsive-interaction-for-people">4. htmx: responsive
+interaction for people</h3>
+<ul>
+<li>htmx 4 is the single supported enhancement library.
+<code>hx-*</code> attributes, derived from trigger and placement, go
+only on native controls that already work, or their containers, so htmx
+issues the same GET or POST to the same href or action.</li>
+<li>One pipeline, two shapes: full page or fragment is chosen from
+<code>HX-Request</code> and <code>HX-Request-Type</code>, fragments come
+from the same templates, and <code>Vary</code> is set accordingly.</li>
+<li>Redirects, retargeting and history go through htmx response headers.
+Errors render as fragments, since htmx 4 swaps 4xx and 5xx bodies.</li>
+<li><strong>Verified by:</strong> <code>hx-*</code> appears only on
+native controls with an <code>href</code> or <code>action</code>, or
+their containers; fragment and full-page responses expose the same
+affordance set; <code>Vary</code> is present.</li>
+</ul>
+
+</body>
+</html>
