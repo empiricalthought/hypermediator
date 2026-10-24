@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from django.core.checks import Warning, run_checks
@@ -82,3 +83,32 @@ def test_warning_not_error() -> None:
     assert message.id == "hypermediator.W101"
     assert message.msg == MESSAGE.format("widget-renew")
     assert str(message.obj).endswith("bypass.html")
+
+
+def test_unterminated_quote_does_not_backtrack() -> None:
+    source = '<a href="' + "{% x %}" * 40 + "\n"
+    start = time.perf_counter()
+    assert lint_source("t.html", source) == []
+    assert time.perf_counter() - start < 1
+
+
+def test_data_attributes_not_reported() -> None:
+    source = '<div data-action="/widget/1/renew/" data-href="{% url \'widget-renew\' 1 %}">'
+    assert lint_source("t.html", source) == []
+
+
+def test_comments_skipped_and_line_numbers_kept() -> None:
+    source = (
+        "{# <a href=\"{% url 'widget-renew' 1 %}\">x</a> #}\n"
+        "{% comment %}\n"
+        '<a href="/widget/1/renew/">y</a>\n'
+        "{% endcomment %}\n"
+        '<a href="/widget/2/renew/">z</a>'
+    )
+    (issue,) = lint_source("t.html", source)
+    assert issue.line == 5
+
+
+def test_namespaced_affordance_reported() -> None:
+    (issue,) = lint_source("t.html", "<a href=\"{% url 'ns:renew' 1 %}\">x</a>")
+    assert issue.url_name == "ns:renew"

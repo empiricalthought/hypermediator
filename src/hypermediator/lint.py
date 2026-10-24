@@ -19,12 +19,16 @@ _MESSAGE = (
     "Hand-written link to affordance '{name}'; use {{% hm_link %}}, {{% hm_action %}} or "
     "{{% hm_form %}} so see/use checks apply."
 )
-_TAG = r"\{%.*?%\}|\{\{.*?\}\}"
+_TAG = r"\{%(?:[^%\n]|%(?!\}))*%\}|\{\{(?:[^}\n]|\}(?!\}))*\}\}"
+# Alternatives inside a quoted value are mutually exclusive so a failed match stays linear.
+_CHAR = r"\{(?![%{])"
 _ATTRIBUTE = re.compile(
-    rf"""\b(?:href|action)\s*=\s*(?:"((?:{_TAG}|[^"])*)"|'((?:{_TAG}|[^'])*)')""",
+    rf"""(?<![\w-])(?:href|action)\s*=\s*"""
+    rf"""(?:"((?:{_TAG}|[^"{{]|{_CHAR})*)"|'((?:{_TAG}|[^'{{]|{_CHAR})*)')""",
     re.IGNORECASE,
 )
 _URL_TAG = re.compile(r"""\{%\s*url\s+(?:'([^']+)'|"([^"]+)")""")
+_COMMENT = re.compile(r"\{%\s*comment\b.*?%\}.*?\{%\s*endcomment\s*%\}|\{#.*?#\}", re.DOTALL)
 _SUFFIXES = (".html", ".txt")
 _OWN_TEMPLATES = Path(__file__).parent / "templates"
 
@@ -59,6 +63,7 @@ def _affordance_name(value: str) -> str | None:
 def lint_source(name: str, source: str) -> list[LintIssue]:
     """The hand-written links to affordances in one template's source."""
     issues: list[LintIssue] = []
+    source = _COMMENT.sub(lambda m: "\n" * m.group().count("\n"), source)
     for attribute in _ATTRIBUTE.finditer(source):
         value = attribute.group(1) if attribute.group(1) is not None else attribute.group(2)
         url_name = _affordance_name(value)
