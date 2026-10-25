@@ -1,0 +1,12 @@
+{% extends "base_generic.html" %}
+{% load hypermediator %}
+
+{% block content %}
+{% partialdef content inline %}
+  {% if object %}
+    {% hm_form "author-update" form object %}
+  {% else %}
+    {% hm_form "author-create" form %}
+  {% endif %}
+{% endpartialdef %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base_generic.html" %}
+{% load hypermediator %}
+
+{% block content %}
+{% partialdef content inline %}
+  <div id="renew-page">
+  <h1>Renew: {{ book_instance.book.title }}</h1>
+  <p>Borrower: {{ book_instance.borrower }}</p>
+  <p{% if book_instance.is_overdue %} class="text-danger"{% endif %}>Due date: {{ book_instance.due_back }}</p>
+
+  {% partialdef renew-form inline %}
+    {% hm_form "renew-book-librarian" form book_instance %}
+  {% endpartialdef %}
+  </div>
+{% endpartialdef %}
+{% endblock %}

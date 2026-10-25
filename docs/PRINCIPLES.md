@@ -35,7 +35,7 @@ Each of the three checks (foundation 4) has a native outcome and its own status 
 ### 3. Rels and microdata: stable machine meaning
 
 - Rels identify links by meaning, independent of wording or language. HTML carries only rel values valid for their element.
-- Microdata types the data and carries extension semantics, including each action's meaning on its form. Both are mirrored into `Link` headers or linksets as URI rels, where IANA and extension rels are legal.
+- Microdata types the data and carries extension semantics, including each action's meaning on its form. Selected affordances are mirrored into `Link` headers or linksets as URI rels, where IANA and extension rels are legal.
 - The `Allow` header is derived from the declared affordances, per target URI: GET and HEAD where a representation or form is served, POST where an action is accepted, OPTIONS where answered.
 - **Verified by:** HTML carries only rel values valid for their element; microdata matches its declared types; `Allow` equals the declared methods.
 

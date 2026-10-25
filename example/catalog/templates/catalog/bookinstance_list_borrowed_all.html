@@ -1,0 +1,19 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+{% partialdef content inline %}
+  <div id="all-borrowed-list">
+  <h1>All Borrowed Books</h1>
+
+  {% if bookinstance_list %}
+    <ul>
+      {% for copy in bookinstance_list %}
+        {% include "catalog/_bookinstance.html" %}
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>There are no books borrowed.</p>
+  {% endif %}
+  </div>
+{% endpartialdef %}
+{% endblock %}

@@ -1,0 +1,9 @@
+{% load hypermediator %}<li{% hm_item copy %}{% if copy.is_overdue %} class="text-danger"{% endif %}>
+  <a href="{% url 'book-detail' copy.book.pk %}">{{ copy.book.title }}</a>
+  <span class="{% if copy.status == 'a' %}text-success{% elif copy.status == 'm' %}text-danger{% else %}text-warning{% endif %}">{{ copy.get_status_display }}</span>
+  {% if copy.status != 'a' %}<span>Due to be returned: {{ copy.due_back|default_if_none:"" }}</span>{% endif %}
+  {% if perms.catalog.can_mark_returned and copy.borrower %}<span>Borrower: {{ copy.borrower }}</span>{% endif %}
+  <span><strong>Imprint:</strong> {{ copy.imprint }}</span>
+  <span class="text-muted"><strong>Id:</strong> {{ copy.id }}</span>
+  {% hm_link "renew-book-librarian" copy %}
+</li>

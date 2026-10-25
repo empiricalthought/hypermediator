@@ -1,0 +1,17 @@
+.sidebar-nav {
+  margin-top: 20px;
+  padding: 0;
+  list-style: none;
+}
+
+/* hypermediator: a disabled affordance and the reason it is unavailable */
+.hm-control a[aria-disabled="true"] {
+  color: var(--bs-secondary-color);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.hm-reason {
+  color: var(--bs-secondary-color);
+  font-style: italic;
+}
